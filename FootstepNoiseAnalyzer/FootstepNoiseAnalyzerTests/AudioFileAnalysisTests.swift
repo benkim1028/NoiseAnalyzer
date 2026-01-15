@@ -13,9 +13,6 @@ final class AudioFileAnalysisTests: XCTestCase {
     
     var classifier: NoiseClassifier!
     
-    /// Minimum gap between events to avoid counting the same footstep multiple times
-    let minimumEventGap: TimeInterval = 0.20
-    
     override func setUp() {
         super.setUp()
         classifier = NoiseClassifier()
@@ -59,7 +56,38 @@ final class AudioFileAnalysisTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mildCount, 8, "Should detect at least 8 mild stomping")
     }
     
+    /// Analyze the stomping2.m4a test file and verify classification results
+    /// Expected: 1 hard stomping event only
+    func testAnalyzeStomping2AudioFile() throws {
+        let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/stomping2.m4a")
+        
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw XCTSkip("Test audio file not found at: \(fileURL.path)")
+        }
+        
+        let results = try analyzeAudioFile(at: fileURL)
+        
+        // Print detailed results for debugging
+        printAnalysisResults(results, fileURL: fileURL)
+        
+        // Count by type
+        var typeCounts: [FootstepType: Int] = [:]
+        for result in results {
+            typeCounts[result.classification.type, default: 0] += 1
+        }
+        
+        let hardCount = typeCounts[.hardStomping] ?? 0
+        let totalFootsteps = results.count
+        
+        // Assertions based on known audio content - single hard stomp
+        XCTAssertEqual(totalFootsteps, 1, "Should detect exactly 1 footstep event")
+        XCTAssertEqual(hardCount, 1, "Should detect exactly 1 hard stomping")
+    }
+    
     // MARK: - Helper Methods
+    
+    /// Minimum gap between events to merge consecutive detections of the same footstep
+    private let eventMergeWindow: TimeInterval = 0.20
     
     private func analyzeAudioFile(at url: URL) throws -> [TestAnalysisResult] {
         let audioFile = try AVAudioFile(forReading: url)
@@ -70,7 +98,10 @@ final class AudioFileAnalysisTests: XCTestCase {
         
         var results: [TestAnalysisResult] = []
         var currentFrame: AVAudioFramePosition = 0
-        var lastEventTime: TimeInterval?
+        var lastConfirmedEventTime: TimeInterval?
+        var lastConfirmedEventDb: Float?
+        var pendingEvent: TestAnalysisResult?
+        var pendingEventStartTime: TimeInterval?
         
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: bufferSize) else {
             throw NSError(domain: "AudioFileAnalysisTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"])
@@ -84,34 +115,56 @@ final class AudioFileAnalysisTests: XCTestCase {
             
             let currentTime = Double(currentFrame) / Double(sampleRate)
             
+            // For echo detection, use the most recent event (pending or confirmed)
+            let echoRefTime: TimeInterval?
+            let echoRefDb: Float?
+            if let pending = pendingEvent {
+                echoRefTime = pending.timestamp
+                echoRefDb = pending.classification.decibelLevel
+            } else {
+                echoRefTime = lastConfirmedEventTime
+                echoRefDb = lastConfirmedEventDb
+            }
+            
             if let classification = classifier.classify(
                 audioBuffer: buffer,
-                previousEventTime: lastEventTime,
+                previousConfirmedEventTime: lastConfirmedEventTime,
+                recentLoudEventTime: echoRefTime,
+                recentLoudEventDb: echoRefDb,
                 currentTime: currentTime
             ) {
-                // Check if too close to last event - merge consecutive detections
-                if let lastTime = lastEventTime, (currentTime - lastTime) < minimumEventGap {
-                    // If this event is louder and a valid footstep, replace the last one
-                    if !results.isEmpty && classification.type != .unknown {
-                        let lastResult = results[results.count - 1]
-                        if classification.decibelLevel > lastResult.classification.decibelLevel || lastResult.classification.type == .unknown {
-                            results[results.count - 1] = TestAnalysisResult(
+                // Check if this is within the merge window of a pending event
+                if let pendingStart = pendingEventStartTime, (currentTime - pendingStart) < eventMergeWindow {
+                    // Within merge window - update pending event if this is louder
+                    if let pending = pendingEvent {
+                        if classification.decibelLevel > pending.classification.decibelLevel {
+                            pendingEvent = TestAnalysisResult(
                                 timestamp: currentTime,
                                 classification: classification
                             )
-                            lastEventTime = currentTime
                         }
                     }
                 } else {
-                    results.append(TestAnalysisResult(
+                    // Outside merge window - confirm pending event and start new one
+                    if let pending = pendingEvent {
+                        results.append(pending)
+                        lastConfirmedEventTime = pending.timestamp
+                        lastConfirmedEventDb = pending.classification.decibelLevel
+                    }
+                    pendingEvent = TestAnalysisResult(
                         timestamp: currentTime,
                         classification: classification
-                    ))
-                    lastEventTime = currentTime
+                    )
+                    pendingEventStartTime = currentTime
                 }
             }
             
             currentFrame += AVAudioFramePosition(framesToRead)
+        }
+        
+        // Don't forget the last pending event
+        if let pending = pendingEvent {
+            results.append(pending)
         }
         
         return results

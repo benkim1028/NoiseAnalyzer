@@ -46,6 +46,7 @@ extension FootstepEvent: @retroactive Arbitrary {
                 id: UUID(),
                 sessionId: UUID(),
                 timestamp: Date(timeIntervalSince1970: Double(abs(c.generate(using: Int.arbitrary) % 2000000000))),
+                timestampInRecording: Double(abs(c.generate(using: Int.arbitrary) % 3600)),
                 classification: c.generate(),
                 audioClipURL: nil,
                 notes: c.generate(using: String.arbitrary.proliferate.map { $0.isEmpty ? nil : $0.joined() })

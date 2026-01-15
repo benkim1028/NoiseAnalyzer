@@ -60,7 +60,9 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
     
     func classify(
         audioBuffer: AVAudioPCMBuffer,
-        previousEventTime: TimeInterval?,
+        previousConfirmedEventTime: TimeInterval?,
+        recentLoudEventTime: TimeInterval?,
+        recentLoudEventDb: Float?,
         currentTime: TimeInterval
     ) -> FootstepClassification? {
         if let fixedResult = fixedResult {
@@ -82,7 +84,7 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
         // Mock dominant frequency (low frequency for footsteps)
         let dominantFrequency: Float = 150  // Simulated low frequency
         
-        let interval: TimeInterval? = previousEventTime.map { currentTime - $0 }
+        let interval: TimeInterval? = previousConfirmedEventTime.map { currentTime - $0 }
         
         // Determine type based on decibel level
         let type: FootstepType
@@ -92,7 +94,19 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
             return nil
         }
         
-        // Check for running first
+        // Check if this is likely an echo of a recent loud event
+        if let recentTime = recentLoudEventTime,
+           let recentDb = recentLoudEventDb {
+            let timeSinceRecent = currentTime - recentTime
+            let dbDrop = recentDb - decibelLevel
+            
+            // If within echo window and significantly quieter, it's likely an echo
+            if timeSinceRecent <= config.echoWindowSeconds && dbDrop >= config.echoDbDropThreshold {
+                return nil
+            }
+        }
+        
+        // Check for running first (using confirmed event interval)
         if let interval = interval, interval <= config.runningIntervalThreshold {
             type = .running
             confidence = 0.85

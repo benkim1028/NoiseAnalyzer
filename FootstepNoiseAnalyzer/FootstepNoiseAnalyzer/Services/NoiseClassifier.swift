@@ -14,12 +14,16 @@ protocol NoiseClassifierProtocol: AnyObject {
     /// Classify an audio buffer and return the footstep classification.
     /// - Parameters:
     ///   - audioBuffer: The audio buffer to classify
-    ///   - previousEventTime: Timestamp of the previous event (nil if first)
+    ///   - previousConfirmedEventTime: Timestamp of the last confirmed event (for running detection)
+    ///   - recentLoudEventTime: Timestamp of the most recent loud event (for echo detection)
+    ///   - recentLoudEventDb: Decibel level of the most recent loud event (for echo detection)
     ///   - currentTime: Current event timestamp
     /// - Returns: The classification result
     func classify(
         audioBuffer: AVAudioPCMBuffer,
-        previousEventTime: TimeInterval?,
+        previousConfirmedEventTime: TimeInterval?,
+        recentLoudEventTime: TimeInterval?,
+        recentLoudEventDb: Float?,
         currentTime: TimeInterval
     ) -> FootstepClassification?
 }
@@ -59,12 +63,20 @@ struct ClassifierConfig {
     /// Minimum decibel level to consider as a valid footstep
     let minimumDecibelLevel: Float
     
+    /// Time window (seconds) to consider for echo detection
+    let echoWindowSeconds: TimeInterval
+    
+    /// Minimum dB drop from previous event to consider current event as echo
+    let echoDbDropThreshold: Float
+    
     static let `default` = ClassifierConfig(
         lowFrequencyThreshold: 500,      // Hz - footsteps typically below 500 Hz
         mildToMediumDb: 56,              // dB SPL - normal walking
         mediumToHardDb: 62,              // dB SPL - heavy walking
         runningIntervalThreshold: 0.15,  // seconds - very short interval for running
-        minimumDecibelLevel: 45          // dB SPL - ignore ambient noise
+        minimumDecibelLevel: 45,         // dB SPL - ignore ambient noise
+        echoWindowSeconds: 1.0,          // seconds - window to detect echoes
+        echoDbDropThreshold: 14.0        // dB - drop threshold to identify echo
     )
 }
 
@@ -89,7 +101,9 @@ final class NoiseClassifier: NoiseClassifierProtocol {
     
     func classify(
         audioBuffer: AVAudioPCMBuffer,
-        previousEventTime: TimeInterval?,
+        previousConfirmedEventTime: TimeInterval?,
+        recentLoudEventTime: TimeInterval?,
+        recentLoudEventDb: Float?,
         currentTime: TimeInterval
     ) -> FootstepClassification? {
         guard audioBuffer.frameLength > 0,
@@ -107,13 +121,25 @@ final class NoiseClassifier: NoiseClassifierProtocol {
             return nil
         }
         
+        // Check if this is likely an echo of a recent loud event
+        if let recentTime = recentLoudEventTime,
+           let recentDb = recentLoudEventDb {
+            let timeSinceRecent = currentTime - recentTime
+            let dbDrop = recentDb - decibelLevel
+            
+            // If within echo window and significantly quieter, it's likely an echo
+            if timeSinceRecent <= config.echoWindowSeconds && dbDrop >= config.echoDbDropThreshold {
+                return nil
+            }
+        }
+        
         // Perform frequency analysis
         guard let spectrum = frequencyAnalyzer.analyze(buffer: audioBuffer) else {
             return nil
         }
         
-        // Calculate interval from previous event
-        let interval: TimeInterval? = previousEventTime.map { currentTime - $0 }
+        // Calculate interval from previous CONFIRMED event (for running detection)
+        let interval: TimeInterval? = previousConfirmedEventTime.map { currentTime - $0 }
         
         // Determine if this is a low-frequency sound (footstep candidate)
         let isLowFrequency = spectrum.dominantFrequency <= config.lowFrequencyThreshold

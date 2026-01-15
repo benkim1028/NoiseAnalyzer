@@ -65,6 +65,7 @@ final class AnalysisService: AnalysisServiceProtocol {
     private var cancellables = Set<AnyCancellable>()
     private var currentSession: RecordingSession?
     private var lastEventTime: TimeInterval?
+    private var lastEventDb: Float?
     
     // MARK: - Initialization
     
@@ -88,6 +89,7 @@ final class AnalysisService: AnalysisServiceProtocol {
         currentSession = session
         isAnalyzing = true
         lastEventTime = nil
+        lastEventDb = nil
         
         // Reset the analyzer state for a new session
         noiseAnalyzer.reset()
@@ -104,6 +106,7 @@ final class AnalysisService: AnalysisServiceProtocol {
         isAnalyzing = false
         currentSession = nil
         lastEventTime = nil
+        lastEventDb = nil
         cancellables.removeAll()
     }
     
@@ -123,7 +126,9 @@ final class AnalysisService: AnalysisServiceProtocol {
         // Classify the detected audio
         guard let classification = noiseClassifier.classify(
             audioBuffer: audioEvent.buffer,
-            previousEventTime: lastEventTime,
+            previousConfirmedEventTime: lastEventTime,
+            recentLoudEventTime: lastEventTime,
+            recentLoudEventDb: lastEventDb,
             currentTime: currentTime
         ) else {
             return // Sound didn't meet classification criteria
@@ -132,8 +137,9 @@ final class AnalysisService: AnalysisServiceProtocol {
         // Skip unknown sounds
         guard classification.type != .unknown else { return }
         
-        // Update last event time
+        // Update last event tracking
         lastEventTime = currentTime
+        lastEventDb = classification.decibelLevel
         
         // Create a FootstepEvent from the classification
         let footstepEvent = FootstepEvent(
