@@ -76,7 +76,8 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
     private let peakWindowSize: Int = 512
     
     /// Minimum peak prominence for detection
-    private let minimumPeakProminence: Float = 0.1
+    /// Calibrated based on real audio files where max RMS ~0.07
+    private let minimumPeakProminence: Float = 0.005
     
     // MARK: - Initialization
     

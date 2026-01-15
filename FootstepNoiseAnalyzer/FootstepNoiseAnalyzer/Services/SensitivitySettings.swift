@@ -40,10 +40,12 @@ final class SensitivitySettings: ObservableObject {
     
     /// Detection threshold for NoiseAnalyzer (RMS amplitude)
     /// Lower value = more sensitive
+    /// Calibrated from real audio files: median RMS ~0.0025, 90th percentile ~0.0085
     var detectionThreshold: Float {
-        // Map sensitivity 0-1 to threshold 0.5-0.1 (inverted)
-        let minThreshold: Float = 0.1
-        let maxThreshold: Float = 0.5
+        // Map sensitivity 0-1 to threshold 0.01-0.002 (inverted)
+        // At sensitivity 0.5, threshold is ~0.006 (between median and 90th percentile)
+        let minThreshold: Float = 0.002  // Most sensitive
+        let maxThreshold: Float = 0.01   // Least sensitive
         return maxThreshold - (sensitivity * (maxThreshold - minThreshold))
     }
     
