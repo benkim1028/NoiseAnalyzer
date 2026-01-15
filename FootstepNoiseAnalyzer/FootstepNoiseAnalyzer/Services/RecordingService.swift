@@ -92,6 +92,7 @@ final class RecordingService: RecordingServiceProtocol {
     private let audioRecorder: AudioRecorderProtocol
     private let analysisService: AnalysisServiceProtocol
     private let eventService: EventServiceProtocol
+    private let coreDataStore: CoreDataStoreProtocol
     private let frequencyAnalyzer: FrequencyAnalyzer
     
     private var cancellables = Set<AnyCancellable>()
@@ -106,14 +107,17 @@ final class RecordingService: RecordingServiceProtocol {
     ///   - audioRecorder: The audio recorder for capturing audio
     ///   - analysisService: The analysis service for detecting and classifying footsteps
     ///   - eventService: The event service for persisting detected events
+    ///   - coreDataStore: The Core Data store for session persistence
     init(
         audioRecorder: AudioRecorderProtocol = AudioRecorder(),
         analysisService: AnalysisServiceProtocol = AnalysisService(),
-        eventService: EventServiceProtocol = EventService.shared
+        eventService: EventServiceProtocol = EventService.shared,
+        coreDataStore: CoreDataStoreProtocol = CoreDataStore.shared
     ) {
         self.audioRecorder = audioRecorder
         self.analysisService = analysisService
         self.eventService = eventService
+        self.coreDataStore = coreDataStore
         self.frequencyAnalyzer = FrequencyAnalyzer(fftSize: 2048, sampleRate: 44100)
     }
     
@@ -163,8 +167,12 @@ final class RecordingService: RecordingServiceProtocol {
         // Stop audio recording
         var session = try await audioRecorder.stopRecording()
         
-        // Update session with final event count
+        // Update session with final event count and mark as completed
         session.eventCount = eventCountSubject.value
+        session.status = .completed
+        
+        // Save session to Core Data
+        try await coreDataStore.saveSession(session)
         
         // Reset state
         currentSession = nil

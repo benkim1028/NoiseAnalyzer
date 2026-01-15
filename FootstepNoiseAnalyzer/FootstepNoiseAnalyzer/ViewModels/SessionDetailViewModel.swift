@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import AVFoundation
 
 /// ViewModel for the session detail view, managing events for a specific session.
 @MainActor
@@ -37,6 +38,16 @@ final class SessionDetailViewModel: ObservableObject {
     /// The note text being edited
     @Published var editingNoteText: String = ""
     
+    /// Whether audio is currently playing
+    @Published var isPlayingAudio: Bool = false
+    
+    /// Current playback progress (0.0 to 1.0)
+    @Published var playbackProgress: Double = 0
+    
+    /// Audio player for session playback
+    private var audioPlayer: AVAudioPlayer?
+    private var playbackTimer: Timer?
+    
     // MARK: - Computed Properties
     
     /// Total number of events in this session
@@ -54,6 +65,19 @@ final class SessionDetailViewModel: ObservableObject {
         Dictionary(grouping: events) { event in
             Calendar.current.component(.hour, from: event.timestamp)
         }
+    }
+    
+    /// Whether the session has audio files to play
+    var hasAudioFiles: Bool {
+        !session.fileURLs.isEmpty && session.fileURLs.first.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+    }
+    
+    /// Formatted playback time
+    var playbackTimeString: String {
+        guard let player = audioPlayer else { return "0:00 / 0:00" }
+        let current = formatTime(player.currentTime)
+        let total = formatTime(player.duration)
+        return "\(current) / \(total)"
     }
     
     // MARK: - Private Properties
@@ -159,6 +183,94 @@ final class SessionDetailViewModel: ObservableObject {
     func cancelEditingNote() {
         editingEvent = nil
         editingNoteText = ""
+    }
+    
+    // MARK: - Audio Playback Methods
+    
+    /// Play the session's audio recording
+    func playAudio() {
+        guard let fileURL = session.fileURLs.first else { return }
+        
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            
+            audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
+            audioPlayer?.play()
+            isPlayingAudio = true
+            startPlaybackTimer()
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    /// Pause audio playback
+    func pauseAudio() {
+        audioPlayer?.pause()
+        isPlayingAudio = false
+        stopPlaybackTimer()
+    }
+    
+    /// Stop audio playback
+    func stopAudio() {
+        audioPlayer?.stop()
+        audioPlayer?.currentTime = 0
+        isPlayingAudio = false
+        playbackProgress = 0
+        stopPlaybackTimer()
+    }
+    
+    /// Toggle play/pause
+    func togglePlayback() {
+        if isPlayingAudio {
+            pauseAudio()
+        } else {
+            playAudio()
+        }
+    }
+    
+    /// Seek to a specific position (0.0 to 1.0)
+    func seek(to progress: Double) {
+        guard let player = audioPlayer else { return }
+        player.currentTime = player.duration * progress
+        playbackProgress = progress
+    }
+    
+    /// Export the audio file to share
+    func getAudioFileURL() -> URL? {
+        return session.fileURLs.first
+    }
+    
+    private func startPlaybackTimer() {
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updatePlaybackProgress()
+            }
+        }
+    }
+    
+    private func stopPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+    }
+    
+    private func updatePlaybackProgress() {
+        guard let player = audioPlayer else { return }
+        
+        if player.isPlaying {
+            playbackProgress = player.currentTime / player.duration
+        } else if player.currentTime >= player.duration - 0.1 {
+            // Playback finished
+            isPlayingAudio = false
+            playbackProgress = 0
+            stopPlaybackTimer()
+        }
+    }
+    
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
     
     /// Format an event's timestamp for display

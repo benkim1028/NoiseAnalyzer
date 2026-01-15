@@ -15,6 +15,7 @@ struct SessionDetailView: View {
     @State private var showingNoteEditor = false
     @State private var audioPlayer: AVAudioPlayer?
     @State private var playingEventId: UUID?
+    @State private var showingShareSheet = false
     
     init(session: RecordingSession) {
         _viewModel = StateObject(wrappedValue: SessionDetailViewModel(session: session))
@@ -34,13 +35,20 @@ struct SessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !viewModel.events.isEmpty {
-                    EditButton()
+                if viewModel.hasAudioFiles {
+                    Button {
+                        showingShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
                 }
             }
         }
         .onAppear {
             viewModel.fetchEvents()
+        }
+        .onDisappear {
+            viewModel.stopAudio()
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -60,10 +68,28 @@ struct SessionDetailView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = viewModel.getAudioFileURL() {
+                ShareSheet(items: [url])
+            }
+        }
     }
     
     private var eventList: some View {
         List {
+            // Audio playback section
+            if viewModel.hasAudioFiles {
+                Section("Recording") {
+                    AudioPlayerView(
+                        isPlaying: viewModel.isPlayingAudio,
+                        progress: viewModel.playbackProgress,
+                        timeString: viewModel.playbackTimeString,
+                        onPlayPause: { viewModel.togglePlayback() },
+                        onSeek: { viewModel.seek(to: $0) }
+                    )
+                }
+            }
+            
             // Session summary section
             Section {
                 SessionSummaryView(
@@ -114,6 +140,49 @@ struct SessionDetailView: View {
         }
     }
 }
+
+// MARK: - Audio Player View
+
+/// View for playing session audio
+struct AudioPlayerView: View {
+    let isPlaying: Bool
+    let progress: Double
+    let timeString: String
+    let onPlayPause: () -> Void
+    let onSeek: (Double) -> Void
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Progress slider
+            Slider(value: Binding(
+                get: { progress },
+                set: { onSeek($0) }
+            ), in: 0...1)
+            .tint(.blue)
+            
+            HStack {
+                // Play/Pause button
+                Button(action: onPlayPause) {
+                    Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 44))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                // Time display
+                Text(timeString)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Share Sheet (uses ShareSheet from ReportView.swift)
 
 
 // MARK: - Empty Events View
