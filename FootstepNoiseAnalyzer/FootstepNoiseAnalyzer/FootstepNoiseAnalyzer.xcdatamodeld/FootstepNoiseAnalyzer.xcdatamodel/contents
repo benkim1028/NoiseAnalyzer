@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23F79" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="RecordingSessionEntity" representedClassName="RecordingSessionEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="eventCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="fileURLsData" optional="YES" attributeType="Binary"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="startTime" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="status" attributeType="String" defaultValueString="recording"/>
+        <relationship name="events" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FootstepEventEntity" inverseName="session" inverseEntity="FootstepEventEntity"/>
+    </entity>
+    <entity name="FootstepEventEntity" representedClassName="FootstepEventEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="audioClipPath" optional="YES" attributeType="String"/>
+        <attribute name="classificationType" attributeType="String" defaultValueString="unknown"/>
+        <attribute name="confidence" attributeType="Float" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="intensity" attributeType="String" defaultValueString="low"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="sessionId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="RecordingSessionEntity" inverseName="events" inverseEntity="RecordingSessionEntity"/>
+    </entity>
+</model>
