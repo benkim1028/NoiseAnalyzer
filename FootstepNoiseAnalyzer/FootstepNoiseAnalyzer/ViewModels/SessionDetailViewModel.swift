@@ -44,9 +44,14 @@ final class SessionDetailViewModel: ObservableObject {
     /// Current playback progress (0.0 to 1.0)
     @Published var playbackProgress: Double = 0
     
+    /// ID of the event currently being played (for event snippet playback)
+    @Published var currentlyPlayingEventId: UUID?
+    
     /// Audio player for session playback
     private var audioPlayer: AVAudioPlayer?
     private var playbackTimer: Timer?
+    private var eventPlaybackEndTime: TimeInterval?
+    private var playingEventId: UUID?
     
     // MARK: - Computed Properties
     
@@ -217,6 +222,9 @@ final class SessionDetailViewModel: ObservableObject {
         audioPlayer?.currentTime = 0
         isPlayingAudio = false
         playbackProgress = 0
+        eventPlaybackEndTime = nil
+        playingEventId = nil
+        currentlyPlayingEventId = nil
         stopPlaybackTimer()
     }
     
@@ -234,6 +242,75 @@ final class SessionDetailViewModel: ObservableObject {
         guard let player = audioPlayer else { return }
         player.currentTime = player.duration * progress
         playbackProgress = progress
+    }
+    
+    /// Play audio for a specific event (plays ~1 second snippet from the event's timestamp)
+    /// - Parameter event: The event to play audio for
+    func playEventAudio(for event: FootstepEvent) {
+        guard let fileURL = session.fileURLs.first else { return }
+        
+        // Stop any current playback
+        stopAudio()
+        
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            
+            audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
+            
+            guard let player = audioPlayer else { return }
+            
+            // Calculate start time (slightly before the event to capture the full sound)
+            let startTime = max(0, event.timestampInRecording - 0.2)
+            
+            // Set end time (~1.5 seconds of audio)
+            let snippetDuration: TimeInterval = 1.5
+            eventPlaybackEndTime = min(startTime + snippetDuration, player.duration)
+            playingEventId = event.id
+            currentlyPlayingEventId = event.id
+            
+            // Seek to the event's timestamp and play
+            player.currentTime = startTime
+            player.play()
+            isPlayingAudio = true
+            
+            // Start timer to monitor playback and stop at end time
+            startEventPlaybackTimer()
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    /// Check if a specific event is currently playing
+    func isEventPlaying(_ event: FootstepEvent) -> Bool {
+        return currentlyPlayingEventId == event.id && isPlayingAudio
+    }
+    
+    private func startEventPlaybackTimer() {
+        stopPlaybackTimer()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateEventPlaybackProgress()
+            }
+        }
+    }
+    
+    private func updateEventPlaybackProgress() {
+        guard let player = audioPlayer else { return }
+        
+        // Check if we've reached the end time for event playback
+        if let endTime = eventPlaybackEndTime {
+            if player.currentTime >= endTime || !player.isPlaying {
+                stopAudio()
+                return
+            }
+        }
+        
+        if player.isPlaying {
+            playbackProgress = player.currentTime / player.duration
+        } else if player.currentTime >= player.duration - 0.1 {
+            stopAudio()
+        }
     }
     
     /// Export the audio file to share

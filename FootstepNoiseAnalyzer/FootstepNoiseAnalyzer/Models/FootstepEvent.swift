@@ -19,6 +19,9 @@ struct FootstepEvent: Identifiable, Codable, Equatable {
     /// When the footstep was detected
     let timestamp: Date
     
+    /// Time offset in seconds from the start of the recording when this event occurred
+    let timestampInRecording: TimeInterval
+    
     /// Classification details for this footstep
     let classification: FootstepClassification
     

@@ -97,7 +97,9 @@ class CoreDataStore: CoreDataStoreProtocol {
             entity.endTime = session.endTime
             entity.eventCount = Int32(session.eventCount)
             entity.status = session.status.rawValue
-            entity.fileURLsData = try? JSONEncoder().encode(session.fileURLs.map { $0.absoluteString })
+            // Store only the relative path (filename) instead of absolute URL
+            let relativePaths = session.fileURLs.map { $0.lastPathComponent }
+            entity.fileURLsData = try? JSONEncoder().encode(relativePaths)
             
             do {
                 try context.save()
@@ -201,6 +203,7 @@ class CoreDataStore: CoreDataStoreProtocol {
             entity.id = event.id
             entity.sessionId = event.sessionId
             entity.timestamp = event.timestamp
+            entity.timestampInRecording = event.timestampInRecording
             entity.classificationType = event.classification.type.rawValue
             entity.confidence = event.classification.confidence
             // Store decibelLevel and dominantFrequency in notes as JSON for now
@@ -340,8 +343,11 @@ class CoreDataStore: CoreDataStoreProtocol {
         
         var fileURLs: [URL] = []
         if let data = entity.fileURLsData,
-           let urlStrings = try? JSONDecoder().decode([String].self, from: data) {
-            fileURLs = urlStrings.compactMap { URL(string: $0) }
+           let fileNames = try? JSONDecoder().decode([String].self, from: data) {
+            // Reconstruct full URLs from relative filenames
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let recordingsPath = documentsPath.appendingPathComponent("Recordings", isDirectory: true)
+            fileURLs = fileNames.map { recordingsPath.appendingPathComponent($0) }
         }
         
         return RecordingSession(
@@ -383,6 +389,7 @@ class CoreDataStore: CoreDataStoreProtocol {
             id: id,
             sessionId: sessionId,
             timestamp: timestamp,
+            timestampInRecording: entity.timestampInRecording,
             classification: classification,
             audioClipURL: audioClipURL,
             notes: entity.notes

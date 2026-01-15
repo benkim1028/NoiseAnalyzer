@@ -13,8 +13,6 @@ import AVFoundation
 struct SessionDetailView: View {
     @StateObject private var viewModel: SessionDetailViewModel
     @State private var showingNoteEditor = false
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var playingEventId: UUID?
     @State private var showingShareSheet = false
     
     init(session: RecordingSession) {
@@ -106,8 +104,9 @@ struct SessionDetailView: View {
                         event: event,
                         formattedTime: viewModel.formattedTime(for: event),
                         typeName: viewModel.displayName(for: event.classification.type),
-                        isPlaying: playingEventId == event.id,
-                        onPlayAudio: { playAudio(for: event) },
+                        isPlaying: viewModel.isEventPlaying(event),
+                        hasSessionAudio: viewModel.hasAudioFiles,
+                        onPlayAudio: { viewModel.playEventAudio(for: event) },
                         onAddNote: {
                             viewModel.startEditingNote(for: event)
                             showingNoteEditor = true
@@ -118,26 +117,6 @@ struct SessionDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-    }
-    
-    private func playAudio(for event: FootstepEvent) {
-        guard let audioURL = event.audioClipURL else { return }
-        
-        // Stop current playback if any
-        audioPlayer?.stop()
-        
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            audioPlayer?.play()
-            playingEventId = event.id
-            
-            // Reset playing state when done
-            DispatchQueue.main.asyncAfter(deadline: .now() + (audioPlayer?.duration ?? 1.0)) {
-                playingEventId = nil
-            }
-        } catch {
-            print("Failed to play audio: \(error)")
-        }
     }
 }
 
@@ -276,6 +255,7 @@ struct EventRowView: View {
     let formattedTime: String
     let typeName: String
     let isPlaying: Bool
+    let hasSessionAudio: Bool
     let onPlayAudio: () -> Void
     let onAddNote: () -> Void
     
@@ -335,8 +315,8 @@ struct EventRowView: View {
             
             // Action buttons
             HStack(spacing: 16) {
-                // Play audio button
-                if event.audioClipURL != nil {
+                // Play audio button (only show if session has audio)
+                if hasSessionAudio {
                     Button(action: onPlayAudio) {
                         Label(
                             isPlaying ? "Playing..." : "Play",

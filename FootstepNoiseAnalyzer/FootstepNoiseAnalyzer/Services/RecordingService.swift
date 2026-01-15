@@ -147,10 +147,10 @@ final class RecordingService: RecordingServiceProtocol {
             }
             .store(in: &cancellables)
         
-        // Subscribe to detected events for persistence
-        analysisService.eventPublisher
-            .sink { [weak self] event in
-                self?.handleDetectedEvent(event)
+        // Subscribe to detected events (with audio buffers) for persistence
+        analysisService.detectedEventPublisher
+            .sink { [weak self] detectedEvent in
+                self?.handleDetectedEvent(detectedEvent)
             }
             .store(in: &cancellables)
         
@@ -193,7 +193,7 @@ final class RecordingService: RecordingServiceProtocol {
     // MARK: - Private Methods
     
     /// Handle a detected footstep event by persisting it and updating the count.
-    private func handleDetectedEvent(_ event: FootstepEvent) {
+    private func handleDetectedEvent(_ detectedEvent: DetectedFootstepEvent) {
         // Update event count
         let newCount = eventCountSubject.value + 1
         eventCountSubject.send(newCount)
@@ -204,15 +204,54 @@ final class RecordingService: RecordingServiceProtocol {
             currentSession = session
         }
         
-        // Persist the event asynchronously
+        // Convert audio buffer to M4A data and persist the event
         Task {
             do {
+                var audioData: Data? = nil
+                
                 // Extract audio data from the buffer if available
-                // For now, we save without audio clip data - this can be enhanced later
-                _ = try await eventService.save(event: event, audioClipData: nil)
+                if let buffer = detectedEvent.audioBuffer {
+                    audioData = convertBufferToM4AData(buffer)
+                }
+                
+                _ = try await eventService.save(event: detectedEvent.event, audioClipData: audioData)
             } catch {
                 print("Failed to save footstep event: \(error.localizedDescription)")
             }
+        }
+    }
+    
+    /// Convert an AVAudioPCMBuffer to M4A audio data
+    /// - Parameter buffer: The audio buffer to convert
+    /// - Returns: M4A encoded audio data, or nil if conversion fails
+    private func convertBufferToM4AData(_ buffer: AVAudioPCMBuffer) -> Data? {
+        // Create a temporary file to write the audio
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
+        
+        defer {
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+        
+        do {
+            // Create audio file with AAC format for M4A
+            let settings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: buffer.format.sampleRate,
+                AVNumberOfChannelsKey: buffer.format.channelCount,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+            
+            let audioFile = try AVAudioFile(forWriting: tempURL, settings: settings)
+            try audioFile.write(from: buffer)
+            
+            // Read the file data
+            return try Data(contentsOf: tempURL)
+        } catch {
+            print("Failed to convert buffer to M4A: \(error.localizedDescription)")
+            return nil
         }
     }
 }

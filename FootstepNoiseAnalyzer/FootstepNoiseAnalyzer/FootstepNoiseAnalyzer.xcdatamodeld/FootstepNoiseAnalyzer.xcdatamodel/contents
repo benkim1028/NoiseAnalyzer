@@ -18,6 +18,7 @@
         <attribute name="notes" optional="YES" attributeType="String"/>
         <attribute name="sessionId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="timestampInRecording" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="RecordingSessionEntity" inverseName="events" inverseEntity="RecordingSessionEntity"/>
     </entity>
 </model>

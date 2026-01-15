@@ -11,9 +11,18 @@ import Foundation
 import AVFoundation
 import Combine
 
+/// Represents a detected footstep event with its associated audio buffer
+struct DetectedFootstepEvent {
+    let event: FootstepEvent
+    let audioBuffer: AVAudioPCMBuffer?
+}
+
 /// Protocol defining the interface for analysis service operations.
 protocol AnalysisServiceProtocol: AnyObject {
-    /// Publisher that emits classified footstep events
+    /// Publisher that emits classified footstep events with audio buffers
+    var detectedEventPublisher: AnyPublisher<DetectedFootstepEvent, Never> { get }
+    
+    /// Publisher that emits classified footstep events (legacy, without audio)
     var eventPublisher: AnyPublisher<FootstepEvent, Never> { get }
     
     /// Whether analysis is currently active
@@ -38,8 +47,12 @@ final class AnalysisService: AnalysisServiceProtocol {
     
     // MARK: - Public Properties
     
+    var detectedEventPublisher: AnyPublisher<DetectedFootstepEvent, Never> {
+        detectedEventSubject.eraseToAnyPublisher()
+    }
+    
     var eventPublisher: AnyPublisher<FootstepEvent, Never> {
-        eventSubject.eraseToAnyPublisher()
+        detectedEventSubject.map { $0.event }.eraseToAnyPublisher()
     }
     
     private(set) var isAnalyzing: Bool = false
@@ -48,7 +61,7 @@ final class AnalysisService: AnalysisServiceProtocol {
     
     private let noiseAnalyzer: NoiseAnalyzerProtocol
     private let noiseClassifier: NoiseClassifierProtocol
-    private let eventSubject = PassthroughSubject<FootstepEvent, Never>()
+    private let detectedEventSubject = PassthroughSubject<DetectedFootstepEvent, Never>()
     private var cancellables = Set<AnyCancellable>()
     private var currentSession: RecordingSession?
     private var lastEventTime: TimeInterval?
@@ -127,12 +140,17 @@ final class AnalysisService: AnalysisServiceProtocol {
             id: UUID(),
             sessionId: session.id,
             timestamp: Date(),
+            timestampInRecording: currentTime,
             classification: classification,
             audioClipURL: nil,
             notes: nil
         )
         
-        // Emit the event
-        eventSubject.send(footstepEvent)
+        // Emit the event with its audio buffer
+        let detectedEvent = DetectedFootstepEvent(
+            event: footstepEvent,
+            audioBuffer: audioEvent.buffer
+        )
+        detectedEventSubject.send(detectedEvent)
     }
 }
