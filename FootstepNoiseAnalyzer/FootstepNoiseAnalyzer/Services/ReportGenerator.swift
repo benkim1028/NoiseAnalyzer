@@ -125,17 +125,28 @@ class ReportGenerator: ReportGeneratorProtocol {
     static let shared = ReportGenerator()
     
     /// The event service for fetching events
-    private let eventService: EventServiceProtocol    
+    private let eventService: EventServiceProtocol
+    
+    /// The Core Data store for fetching sessions
+    private let coreDataStore: CoreDataStoreProtocol
+    
     /// Date formatter for report display
     private let dateFormatter: DateFormatter
     
     /// Time formatter for hour display
     private let timeFormatter: DateFormatter
     
+    /// Cache of sessions by ID for report generation
+    private var sessionCache: [UUID: RecordingSession] = [:]
+    
     /// Initializes the report generator with dependencies
-    /// - Parameter eventService: The event service to use for fetching events
-    init(eventService: EventServiceProtocol = EventService.shared) {
+    /// - Parameters:
+    ///   - eventService: The event service to use for fetching events
+    ///   - coreDataStore: The Core Data store for fetching sessions
+    init(eventService: EventServiceProtocol = EventService.shared,
+         coreDataStore: CoreDataStoreProtocol = CoreDataStore.shared) {
         self.eventService = eventService
+        self.coreDataStore = coreDataStore
         
         self.dateFormatter = DateFormatter()
         self.dateFormatter.dateStyle = .medium
@@ -164,13 +175,23 @@ class ReportGenerator: ReportGeneratorProtocol {
             throw ReportGeneratorError.fetchFailed(underlying: error)
         }
         
+        // If including audio clips, pre-fetch all sessions for the events
+        if includeAudioClips {
+            sessionCache.removeAll()
+            let sessionIds = Set(events.map { $0.sessionId })
+            for sessionId in sessionIds {
+                if let session = try? await coreDataStore.fetchSession(by: sessionId) {
+                    sessionCache[sessionId] = session
+                }
+            }
+        } else {
+            sessionCache.removeAll()
+        }
+        
         // Calculate statistics
         let eventsByType = calculateEventsByType(events)
         let eventsByTimeSlotAndType = calculateEventsByTimeSlotAndType(events, rangeType: rangeType)
         let peakActivityTimes = calculatePeakActivityTimes(eventsByTimeSlot: eventsByTimeSlotAndType, rangeType: rangeType, referenceDate: from)
-        
-        // Process events based on includeAudioClips flag
-        let reportEvents = includeAudioClips ? events : events.map { $0.withoutAudioClip() }
         
         return EvidenceReport(
             dateRange: from...to,
@@ -179,7 +200,7 @@ class ReportGenerator: ReportGeneratorProtocol {
             eventsByType: eventsByType,
             eventsByTimeSlotAndType: eventsByTimeSlotAndType,
             peakActivityTimes: peakActivityTimes,
-            events: reportEvents,
+            events: events,
             generatedAt: Date()
         )
     }
@@ -399,7 +420,7 @@ class ReportGenerator: ReportGeneratorProtocol {
             
             yPosition = drawSectionHeader("Event Details", at: yPosition, width: contentWidth, margin: margin)
             
-            for (index, event) in report.events.prefix(50).enumerated() {
+            for (index, event) in report.events.prefix(200).enumerated() {
                 // Check if we need a new page
                 if yPosition > pageHeight - 80 {
                     context.beginPage()
@@ -409,14 +430,22 @@ class ReportGenerator: ReportGeneratorProtocol {
                 let eventText = "\(index + 1). \(dateFormatter.string(from: event.timestamp)) - \(event.classification.type.displayName) (\(Int(event.classification.decibelLevel)) dB, \(Int(event.classification.confidence * 100))% confidence)"
                 yPosition = drawText(eventText, at: yPosition, width: contentWidth, margin: margin, fontSize: 10)
                 
+                // Show audio reference if session cache has data (includeAudioClips was enabled)
+                if let session = sessionCache[event.sessionId] {
+                    let timeOffset = event.timestamp.timeIntervalSince(session.startTime)
+                    let audioFileName = session.fileURLs.first?.lastPathComponent ?? "Recording"
+                    let offsetFormatted = formatTimeOffset(timeOffset)
+                    yPosition = drawText("   Audio: \(audioFileName) @ \(offsetFormatted)", at: yPosition, width: contentWidth, margin: margin, fontSize: 9, color: .systemBlue)
+                }
+                
                 if let notes = event.notes, !notes.isEmpty {
                     yPosition = drawText("   Notes: \(notes)", at: yPosition, width: contentWidth, margin: margin, fontSize: 9, color: .darkGray)
                 }
             }
             
-            if report.events.count > 50 {
+            if report.events.count > 200 {
                 yPosition += 10
-                yPosition = drawText("... and \(report.events.count - 50) more events", at: yPosition, width: contentWidth, margin: margin, fontSize: 10, color: .gray)
+                yPosition = drawText("... and \(report.events.count - 200) more events", at: yPosition, width: contentWidth, margin: margin, fontSize: 10, color: .gray)
             }
         }
         
@@ -668,6 +697,20 @@ class ReportGenerator: ReportGeneratorProtocol {
         let period = hour >= 12 ? "PM" : "AM"
         let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
         return "\(displayHour)\(period)"
+    }
+    
+    /// Formats a time offset in seconds to MM:SS or HH:MM:SS format
+    private func formatTimeOffset(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(max(0, seconds))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%d:%02d", minutes, secs)
+        }
     }
 
     

@@ -103,10 +103,16 @@ struct OptionsSection: View {
             Text("Options")
                 .font(.headline)
             
-            Toggle("Include Audio Clip References", isOn: $includeAudioClips)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Include Audio Clip References", isOn: $includeAudioClips)
+                
+                Text("Shows audio file references in the PDF when available")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
         }
     }
 }
