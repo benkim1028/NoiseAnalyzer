@@ -14,9 +14,19 @@ final class DecibelCalculator {
     
     // MARK: - Constants
     
-    /// Offset to convert dBFS to approximate dB SPL
-    /// This is an approximation assuming typical iOS microphone sensitivity
-    static let dbFSToSPLOffset: Float = 90.0
+    /// Base offset to convert dBFS to approximate dB SPL
+    /// iOS microphones typically have sensitivity around -38 to -42 dBFS/Pa
+    /// This base offset of 75 dB is calibrated so that:
+    /// - Quiet room (~-45 dBFS) shows ~30 dB SPL
+    /// - Normal conversation (~-25 dBFS) shows ~50 dB SPL
+    /// - Loud sounds (~-10 dBFS) shows ~65 dB SPL
+    /// Users can adjust via calibrationOffset in SensitivitySettings
+    static let baseDbFSToSPLOffset: Float = 75.0
+    
+    /// Dynamic offset that includes user calibration
+    static var dbFSToSPLOffset: Float {
+        return baseDbFSToSPLOffset + SensitivitySettings.shared.calibrationOffset
+    }
     
     /// Minimum dB SPL value (practical silence floor)
     static let minimumDecibelsSPL: Float = 0.0

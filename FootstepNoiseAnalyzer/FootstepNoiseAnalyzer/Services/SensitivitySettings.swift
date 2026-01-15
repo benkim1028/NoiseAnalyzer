@@ -2,7 +2,7 @@
 //  SensitivitySettings.swift
 //  FootstepNoiseAnalyzer
 //
-//  Manages user-adjustable microphone sensitivity settings with persistence.
+//  Manages user-adjustable microphone sensitivity and calibration settings with persistence.
 //
 
 import Foundation
@@ -26,6 +26,16 @@ final class SensitivitySettings: ObservableObject {
         }
     }
     
+    /// Microphone calibration offset in dB (-20 to +20)
+    /// Adjusts the dBFS to dB SPL conversion to match real-world readings.
+    /// Increase if readings are too low, decrease if too high.
+    /// Default is 0 (no adjustment from base offset)
+    @Published var calibrationOffset: Float {
+        didSet {
+            UserDefaults.standard.set(calibrationOffset, forKey: calibrationKey)
+        }
+    }
+    
     // MARK: - Computed Properties
     
     /// Detection threshold for NoiseAnalyzer (RMS amplitude)
@@ -46,6 +56,12 @@ final class SensitivitySettings: ObservableObject {
         return maxDb - (sensitivity * (maxDb - minDb))
     }
     
+    /// Total dBFS to dB SPL offset including user calibration
+    /// Base offset of 75 dB + user calibration adjustment
+    var effectiveDbOffset: Float {
+        return DecibelCalculator.baseDbFSToSPLOffset + calibrationOffset
+    }
+    
     /// Human-readable sensitivity label
     var sensitivityLabel: String {
         switch sensitivity {
@@ -60,9 +76,19 @@ final class SensitivitySettings: ObservableObject {
         }
     }
     
+    /// Human-readable calibration label
+    var calibrationLabel: String {
+        if calibrationOffset > 0 {
+            return "+\(Int(calibrationOffset)) dB"
+        } else {
+            return "\(Int(calibrationOffset)) dB"
+        }
+    }
+    
     // MARK: - Private Properties
     
     private let sensitivityKey = "footstep_detection_sensitivity"
+    private let calibrationKey = "microphone_calibration_offset"
     
     // MARK: - Initialization
     
@@ -73,6 +99,13 @@ final class SensitivitySettings: ObservableObject {
         } else {
             self.sensitivity = 0.5 // Default medium sensitivity
         }
+        
+        // Load saved calibration or use default
+        if UserDefaults.standard.object(forKey: calibrationKey) != nil {
+            self.calibrationOffset = UserDefaults.standard.float(forKey: calibrationKey)
+        } else {
+            self.calibrationOffset = 0.0 // Default no adjustment
+        }
     }
     
     // MARK: - Methods
@@ -80,5 +113,16 @@ final class SensitivitySettings: ObservableObject {
     /// Reset sensitivity to default value
     func resetToDefault() {
         sensitivity = 0.5
+    }
+    
+    /// Reset calibration to default value
+    func resetCalibration() {
+        calibrationOffset = 0.0
+    }
+    
+    /// Reset all settings to defaults
+    func resetAll() {
+        resetToDefault()
+        resetCalibration()
     }
 }

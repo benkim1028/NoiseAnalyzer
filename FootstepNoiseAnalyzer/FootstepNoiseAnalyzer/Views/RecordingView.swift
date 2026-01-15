@@ -82,36 +82,76 @@ struct SensitivitySliderView: View {
     @ObservedObject var sensitivitySettings: SensitivitySettings
     
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Image(systemName: "mic.fill")
-                    .foregroundColor(.blue)
-                Text("Mic Sensitivity")
-                    .font(.subheadline)
+        VStack(spacing: 16) {
+            // Detection Sensitivity
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "waveform.badge.magnifyingglass")
+                        .foregroundColor(.blue)
+                    Text("Detection Sensitivity")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(sensitivitySettings.sensitivityLabel)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                }
+                
+                HStack(spacing: 12) {
+                    Image(systemName: "speaker.wave.1")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Slider(value: $sensitivitySettings.sensitivity, in: 0...1, step: 0.05)
+                        .tint(.blue)
+                    
+                    Image(systemName: "speaker.wave.3")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Text("Adjust to detect quieter or louder footsteps")
+                    .font(.caption2)
                     .foregroundColor(.secondary)
-                Spacer()
-                Text(sensitivitySettings.sensitivityLabel)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.blue)
             }
             
-            HStack(spacing: 12) {
-                Image(systemName: "speaker.wave.1")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Divider()
+            
+            // Microphone Calibration
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "mic.badge.plus")
+                        .foregroundColor(.orange)
+                    Text("Mic Calibration")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(sensitivitySettings.calibrationLabel)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.orange)
+                }
                 
-                Slider(value: $sensitivitySettings.sensitivity, in: 0...1, step: 0.05)
-                    .tint(.blue)
+                HStack(spacing: 12) {
+                    Text("-20")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 24)
+                    
+                    Slider(value: $sensitivitySettings.calibrationOffset, in: -20...20, step: 1)
+                        .tint(.orange)
+                    
+                    Text("+20")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 24)
+                }
                 
-                Image(systemName: "speaker.wave.3")
-                    .font(.caption)
+                Text("Adjust until ambient sound shows 30-40 dB")
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            
-            Text("Increase for quieter microphones (e.g., iPad)")
-                .font(.caption2)
-                .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(.systemGray6))
@@ -226,7 +266,7 @@ struct DecibelLevelView: View {
     let audioLevel: Float
     
     private var decibelSPL: Int {
-        // audioLevel is normalized 0-1 based on 30-100 dB SPL range
+        // audioLevel is normalized 0-1 based on 30-100 dB SPL range in AudioRecorder
         // Convert back to dB SPL for display
         guard audioLevel > 0 else { return 30 }
         let minSPL: Float = 30.0
