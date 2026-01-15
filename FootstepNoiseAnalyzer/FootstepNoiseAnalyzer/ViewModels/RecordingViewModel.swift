@@ -46,6 +46,9 @@ final class RecordingViewModel: ObservableObject {
     /// Whether an error alert should be shown
     @Published var showError: Bool = false
     
+    /// Sensitivity settings for microphone detection
+    let sensitivitySettings = SensitivitySettings.shared
+    
     // MARK: - Computed Properties
     
     /// Formatted duration string (MM:SS or HH:MM:SS)

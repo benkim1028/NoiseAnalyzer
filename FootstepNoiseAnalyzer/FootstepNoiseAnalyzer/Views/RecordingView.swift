@@ -14,51 +14,56 @@ struct RecordingView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Status indicator
-                StatusBadge(status: viewModel.statusText, isRecording: viewModel.isRecording)
-                
-                // Duration display
-                Text(viewModel.formattedDuration)
-                    .font(.system(size: 48, weight: .light, design: .monospaced))
-                    .foregroundColor(viewModel.isRecording ? .primary : .secondary)
-                
-                // Audio waveform visualization
-                AudioWaveformView(audioLevel: viewModel.audioLevel, isRecording: viewModel.isRecording)
-                    .frame(height: 120)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Status indicator
+                    StatusBadge(status: viewModel.statusText, isRecording: viewModel.isRecording)
+                    
+                    // Duration display
+                    Text(viewModel.formattedDuration)
+                        .font(.system(size: 48, weight: .light, design: .monospaced))
+                        .foregroundColor(viewModel.isRecording ? .primary : .secondary)
+                    
+                    // Audio waveform visualization
+                    AudioWaveformView(audioLevel: viewModel.audioLevel, isRecording: viewModel.isRecording)
+                        .frame(height: 120)
+                        .padding(.horizontal)
+                    
+                    // Decibel level display
+                    DecibelLevelView(audioLevel: viewModel.audioLevel)
+                        .padding(.horizontal)
+                    
+                    // Frequency display
+                    FrequencyDisplayView(
+                        dominantFrequency: viewModel.dominantFrequency,
+                        spectralCentroid: viewModel.spectralCentroid,
+                        isRecording: viewModel.isRecording
+                    )
                     .padding(.horizontal)
-                
-                // Decibel level display
-                DecibelLevelView(audioLevel: viewModel.audioLevel)
+                    
+                    // Event counter and last event indicator
+                    EventIndicatorView(
+                        eventCount: viewModel.eventCount,
+                        lastEvent: viewModel.lastDetectedEvent
+                    )
                     .padding(.horizontal)
-                
-                // Frequency display
-                FrequencyDisplayView(
-                    dominantFrequency: viewModel.dominantFrequency,
-                    spectralCentroid: viewModel.spectralCentroid,
-                    isRecording: viewModel.isRecording
-                )
-                .padding(.horizontal)
-                
-                // Event counter and last event indicator
-                EventIndicatorView(
-                    eventCount: viewModel.eventCount,
-                    lastEvent: viewModel.lastDetectedEvent
-                )
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                // Recording controls
-                RecordingControlsView(
-                    isRecording: viewModel.isRecording,
-                    isPaused: viewModel.isPaused,
-                    onToggleRecording: viewModel.toggleRecording,
-                    onTogglePause: viewModel.togglePause
-                )
-                .padding(.bottom, 40)
+                    
+                    // Sensitivity slider
+                    SensitivitySliderView(sensitivitySettings: viewModel.sensitivitySettings)
+                        .padding(.horizontal)
+                    
+                    // Recording controls
+                    RecordingControlsView(
+                        isRecording: viewModel.isRecording,
+                        isPaused: viewModel.isPaused,
+                        onToggleRecording: viewModel.toggleRecording,
+                        onTogglePause: viewModel.togglePause
+                    )
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
+                }
+                .padding(.top, 20)
             }
-            .padding(.top, 20)
             .navigationTitle("Record")
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -69,6 +74,50 @@ struct RecordingView: View {
     }
 }
 
+
+// MARK: - Sensitivity Slider View
+
+/// Slider for adjusting microphone sensitivity
+struct SensitivitySliderView: View {
+    @ObservedObject var sensitivitySettings: SensitivitySettings
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: "mic.fill")
+                    .foregroundColor(.blue)
+                Text("Mic Sensitivity")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(sensitivitySettings.sensitivityLabel)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.blue)
+            }
+            
+            HStack(spacing: 12) {
+                Image(systemName: "speaker.wave.1")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Slider(value: $sensitivitySettings.sensitivity, in: 0...1, step: 0.05)
+                    .tint(.blue)
+                
+                Image(systemName: "speaker.wave.3")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Text("Increase for quieter microphones (e.g., iPad)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
 
 // MARK: - Status Badge
 

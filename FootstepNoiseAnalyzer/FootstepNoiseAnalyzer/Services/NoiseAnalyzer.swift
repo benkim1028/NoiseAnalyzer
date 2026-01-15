@@ -9,6 +9,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import SwiftUI
 
 /// Represents a detected audio event before classification.
 struct AudioEvent: Equatable {
@@ -57,11 +58,13 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
         detectionSubject.eraseToAnyPublisher()
     }
     
-    private(set) var detectionThreshold: Float = 0.3
+    private(set) var detectionThreshold: Float
     
     // MARK: - Private Properties
     
     private let detectionSubject = PassthroughSubject<AudioEvent, Never>()
+    private let sensitivitySettings: SensitivitySettings
+    private var cancellables = Set<AnyCancellable>()
     
     /// Minimum time interval between detected events (in seconds)
     private let minimumEventInterval: TimeInterval = 0.1
@@ -77,8 +80,17 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
     
     // MARK: - Initialization
     
-    init(threshold: Float = 0.3) {
-        self.detectionThreshold = max(0, min(1, threshold))
+    init(threshold: Float? = nil, sensitivitySettings: SensitivitySettings = .shared) {
+        self.sensitivitySettings = sensitivitySettings
+        self.detectionThreshold = threshold ?? sensitivitySettings.detectionThreshold
+        
+        // Subscribe to sensitivity changes
+        sensitivitySettings.$sensitivity
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.detectionThreshold = sensitivitySettings.detectionThreshold
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods

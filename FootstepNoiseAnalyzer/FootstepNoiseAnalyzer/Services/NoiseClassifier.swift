@@ -88,13 +88,20 @@ final class NoiseClassifier: NoiseClassifierProtocol {
     private let frequencyAnalyzer: FrequencyAnalyzer
     private let config: ClassifierConfig
     private let sampleRate: Float
+    private let sensitivitySettings: SensitivitySettings
     
     // MARK: - Initialization
     
-    init(config: ClassifierConfig = .default, sampleRate: Float = 44100) {
+    init(config: ClassifierConfig = .default, sampleRate: Float = 44100, sensitivitySettings: SensitivitySettings = .shared) {
         self.config = config
         self.sampleRate = sampleRate
+        self.sensitivitySettings = sensitivitySettings
         self.frequencyAnalyzer = FrequencyAnalyzer(fftSize: 2048, sampleRate: sampleRate)
+    }
+    
+    /// Current minimum decibel level based on sensitivity settings
+    private var effectiveMinimumDecibelLevel: Float {
+        sensitivitySettings.minimumDecibelLevel
     }
     
     // MARK: - Public Methods
@@ -116,8 +123,8 @@ final class NoiseClassifier: NoiseClassifierProtocol {
         // Calculate decibel level
         let decibelLevel = calculateDecibelLevel(channelData, frameCount: frameCount)
         
-        // Ignore sounds below minimum threshold
-        guard decibelLevel >= config.minimumDecibelLevel else {
+        // Ignore sounds below minimum threshold (using sensitivity-adjusted level)
+        guard decibelLevel >= effectiveMinimumDecibelLevel else {
             return nil
         }
         

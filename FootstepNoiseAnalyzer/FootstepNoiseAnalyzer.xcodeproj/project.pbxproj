@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E01000061 /* SensitivitySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000061 /* SensitivitySettings.swift */; };
 		E01000060 /* AudioFileAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000060 /* AudioFileAnalysisTests.swift */; };
 		E01000001 /* FootstepNoiseAnalyzerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000001 /* FootstepNoiseAnalyzerApp.swift */; };
 		E01000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000002 /* ContentView.swift */; };
@@ -90,6 +91,7 @@
 		E02000042 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		E02000043 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		E02000050 /* FrequencyAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyAnalyzer.swift; sourceTree = "<group>"; };
+		E02000061 /* SensitivitySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivitySettings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +176,7 @@
 				E0200001C /* AnalysisService.swift */,
 				E0200001D /* RecordingService.swift */,
 				E0200001E /* ReportGenerator.swift */,
+				E02000061 /* SensitivitySettings.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -340,6 +343,7 @@
 				E0100001C /* AnalysisService.swift in Sources */,
 				E0100001D /* RecordingService.swift in Sources */,
 				E0100001E /* ReportGenerator.swift in Sources */,
+				E01000061 /* SensitivitySettings.swift in Sources */,
 				E01000030 /* RecordingViewModel.swift in Sources */,
 				E01000031 /* SessionListViewModel.swift in Sources */,
 				E01000032 /* SessionDetailViewModel.swift in Sources */,
