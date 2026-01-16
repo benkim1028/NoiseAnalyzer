@@ -67,7 +67,8 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
     private var cancellables = Set<AnyCancellable>()
     
     /// Minimum time interval between detected events (in seconds)
-    private let minimumEventInterval: TimeInterval = 0.1
+    /// Calibrated to prevent detecting echoes and reverberations as separate events
+    private let minimumEventInterval: TimeInterval = 0.25
     
     /// Timestamp of the last detected event
     private var lastEventTime: TimeInterval = -1

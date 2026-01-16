@@ -74,9 +74,9 @@ struct ClassifierConfig {
         mildToMediumDb: 56,              // dB SPL - normal walking
         mediumToHardDb: 62,              // dB SPL - heavy walking
         runningIntervalThreshold: 0.15,  // seconds - very short interval for running
-        minimumDecibelLevel: 45,         // dB SPL - ignore ambient noise
-        echoWindowSeconds: 1.0,          // seconds - window to detect echoes
-        echoDbDropThreshold: 14.0        // dB - drop threshold to identify echo
+        minimumDecibelLevel: 50,         // dB SPL - ignore ambient noise (raised to filter quiet sounds)
+        echoWindowSeconds: 1.5,          // seconds - window to detect echoes (increased for reverb)
+        echoDbDropThreshold: 8.0         // dB - drop threshold to identify echo (lowered to catch more echoes)
     )
 }
 

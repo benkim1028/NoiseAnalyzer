@@ -3,6 +3,7 @@
 //  FootstepNoiseAnalyzerTests
 //
 //  Tests that analyze real audio files for footstep classification.
+//  Uses the same NoiseAnalyzer -> NoiseClassifier pipeline as production code.
 //
 
 import XCTest
@@ -12,27 +13,25 @@ import Combine
 
 final class AudioFileAnalysisTests: XCTestCase {
     
-    var classifier: NoiseClassifier!
-    var noiseAnalyzer: NoiseAnalyzer!
+    var analysisService: AnalysisService!
     var cancellables: Set<AnyCancellable>!
     
     override func setUp() {
         super.setUp()
-        classifier = NoiseClassifier()
-        // Use a low threshold calibrated from real audio files
-        // RMS median ~0.0025, 90th percentile ~0.0085
-        noiseAnalyzer = NoiseAnalyzer(threshold: 0.003)
+        // Reset sensitivity to default for consistent test results
+        SensitivitySettings.shared.resetToDefault()
+        // Use the same AnalysisService that the app uses in production
+        analysisService = AnalysisService()
         cancellables = Set<AnyCancellable>()
     }
     
     override func tearDown() {
-        classifier = nil
-        noiseAnalyzer = nil
+        analysisService = nil
         cancellables = nil
         super.tearDown()
     }
     
-    /// Analyze the stomping.m4a test file and verify classification results
+    /// Analyze the stomping.m4a test file using the production pipeline
     /// Expected: ~15-17 events with 1 hard, 2 medium, rest mild stomping
     func testAnalyzeStompingAudioFile() throws {
         let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/stomping.m4a")
@@ -41,7 +40,7 @@ final class AudioFileAnalysisTests: XCTestCase {
             throw XCTSkip("Test audio file not found at: \(fileURL.path)")
         }
         
-        let results = try analyzeAudioFile(at: fileURL)
+        let results = try analyzeAudioFileWithProductionPipeline(at: fileURL)
         
         // Print detailed results for debugging
         printAnalysisResults(results, fileURL: fileURL)
@@ -59,45 +58,13 @@ final class AudioFileAnalysisTests: XCTestCase {
         
         // Assertions based on known audio content
         XCTAssertGreaterThanOrEqual(totalFootsteps, 12, "Should detect at least 12 footstep events")
-        XCTAssertLessThanOrEqual(totalFootsteps, 55, "Should not detect more than 55 events (direct classifier is more sensitive)")
+        XCTAssertLessThanOrEqual(totalFootsteps, 25, "Should not detect more than 25 events")
         XCTAssertGreaterThanOrEqual(hardCount, 1, "Should detect at least 1 hard stomping")
         XCTAssertGreaterThanOrEqual(mediumCount, 1, "Should detect at least 1 medium stomping")
         XCTAssertGreaterThanOrEqual(mildCount, 8, "Should detect at least 8 mild stomping")
     }
     
-    /// Analyze stomping.m4a using the FULL pipeline (NoiseAnalyzer -> NoiseClassifier)
-    /// This tests the same code path as real-time recording
-    func testAnalyzeStompingWithFullPipeline() throws {
-        let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/stomping.m4a")
-        
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw XCTSkip("Test audio file not found at: \(fileURL.path)")
-        }
-        
-        let results = try analyzeAudioFileWithFullPipeline(at: fileURL)
-        
-        // Print detailed results for debugging
-        print("\n*** FULL PIPELINE RESULTS (NoiseAnalyzer -> NoiseClassifier) ***")
-        printAnalysisResults(results, fileURL: fileURL)
-        
-        // Count by type
-        var typeCounts: [FootstepType: Int] = [:]
-        for result in results {
-            typeCounts[result.classification.type, default: 0] += 1
-        }
-        
-        let mildCount = typeCounts[.mildStomping] ?? 0
-        let mediumCount = typeCounts[.mediumStomping] ?? 0
-        let hardCount = typeCounts[.hardStomping] ?? 0
-        let totalFootsteps = mildCount + mediumCount + hardCount
-        
-        // Same assertions - full pipeline should detect same events
-        XCTAssertGreaterThanOrEqual(totalFootsteps, 12, "Full pipeline should detect at least 12 footstep events")
-        XCTAssertLessThanOrEqual(totalFootsteps, 25, "Full pipeline should not detect more than 25 events")
-        XCTAssertGreaterThanOrEqual(hardCount, 1, "Full pipeline should detect at least 1 hard stomping")
-    }
-    
-    /// Analyze the stomping2.m4a test file and verify classification results
+    /// Analyze the stomping2.m4a test file using the production pipeline
     /// Expected: 1 hard stomping event only
     func testAnalyzeStomping2AudioFile() throws {
         let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/stomping2.m4a")
@@ -106,7 +73,7 @@ final class AudioFileAnalysisTests: XCTestCase {
             throw XCTSkip("Test audio file not found at: \(fileURL.path)")
         }
         
-        let results = try analyzeAudioFile(at: fileURL)
+        let results = try analyzeAudioFileWithProductionPipeline(at: fileURL)
         
         // Print detailed results for debugging
         printAnalysisResults(results, fileURL: fileURL)
@@ -121,38 +88,8 @@ final class AudioFileAnalysisTests: XCTestCase {
         let totalFootsteps = results.count
         
         // Assertions based on known audio content - single hard stomp
-        // Direct classifier may detect more due to no NoiseAnalyzer filtering
-        XCTAssertGreaterThanOrEqual(totalFootsteps, 1, "Should detect at least 1 footstep event")
-        XCTAssertLessThanOrEqual(totalFootsteps, 10, "Should not detect more than 10 events")
-        XCTAssertGreaterThanOrEqual(hardCount, 1, "Should detect at least 1 hard stomping")
-    }
-    
-    /// Analyze stomping2.m4a using the FULL pipeline (NoiseAnalyzer -> NoiseClassifier)
-    func testAnalyzeStomping2WithFullPipeline() throws {
-        let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/stomping2.m4a")
-        
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw XCTSkip("Test audio file not found at: \(fileURL.path)")
-        }
-        
-        let results = try analyzeAudioFileWithFullPipeline(at: fileURL)
-        
-        // Print detailed results for debugging
-        print("\n*** FULL PIPELINE RESULTS (NoiseAnalyzer -> NoiseClassifier) ***")
-        printAnalysisResults(results, fileURL: fileURL)
-        
-        // Count by type
-        var typeCounts: [FootstepType: Int] = [:]
-        for result in results {
-            typeCounts[result.classification.type, default: 0] += 1
-        }
-        
-        let hardCount = typeCounts[.hardStomping] ?? 0
-        let totalFootsteps = results.count
-        
-        // Same assertions - full pipeline should detect same events
-        XCTAssertEqual(totalFootsteps, 1, "Full pipeline should detect exactly 1 footstep event")
-        XCTAssertEqual(hardCount, 1, "Full pipeline should detect exactly 1 hard stomping")
+        XCTAssertEqual(totalFootsteps, 1, "Should detect exactly 1 footstep event")
+        XCTAssertEqual(hardCount, 1, "Should detect exactly 1 hard stomping")
     }
     
     // MARK: - Helper Methods
@@ -160,9 +97,9 @@ final class AudioFileAnalysisTests: XCTestCase {
     /// Minimum gap between events to merge consecutive detections of the same footstep
     private let eventMergeWindow: TimeInterval = 0.20
     
-    /// Analyze audio file using the full pipeline (NoiseAnalyzer -> NoiseClassifier)
-    /// This matches how real-time recording works in the app
-    private func analyzeAudioFileWithFullPipeline(at url: URL) throws -> [TestAnalysisResult] {
+    /// Analyze audio file using the production AnalysisService pipeline.
+    /// This is the exact same code path used during real-time recording in the app.
+    private func analyzeAudioFileWithProductionPipeline(at url: URL) throws -> [TestAnalysisResult] {
         let audioFile = try AVAudioFile(forReading: url)
         let format = audioFile.processingFormat
         let sampleRate = Float(format.sampleRate)
@@ -171,71 +108,50 @@ final class AudioFileAnalysisTests: XCTestCase {
         
         var results: [TestAnalysisResult] = []
         var currentFrame: AVAudioFramePosition = 0
-        var lastConfirmedEventTime: TimeInterval?
-        var lastConfirmedEventDb: Float?
         var pendingEvent: TestAnalysisResult?
         var pendingEventStartTime: TimeInterval?
         
-        // Track RMS values for debugging
-        var allRmsValues: [Float] = []
-        var detectedRmsValues: [Float] = []
+        // Create a mock session for the analysis service
+        let mockSession = RecordingSession(
+            id: UUID(),
+            startTime: Date(),
+            endTime: nil,
+            eventCount: 0,
+            fileURLs: [url],
+            status: .recording
+        )
         
-        // Reset analyzer state
-        noiseAnalyzer.reset()
+        // Start analysis using the production service
+        analysisService.startAnalysis(for: mockSession)
         
-        // Subscribe to detection events from NoiseAnalyzer
-        let expectation = XCTestExpectation(description: "Audio analysis complete")
-        
-        noiseAnalyzer.detectionPublisher
-            .sink { [weak self] audioEvent in
+        // Subscribe to events from the production pipeline
+        analysisService.eventPublisher
+            .sink { [weak self] footstepEvent in
                 guard let self = self else { return }
                 
-                detectedRmsValues.append(audioEvent.amplitude)
+                let currentTime = footstepEvent.timestampInRecording
                 
-                let currentTime = audioEvent.timestamp
-                
-                // For echo detection, use the most recent event (pending or confirmed)
-                let echoRefTime: TimeInterval?
-                let echoRefDb: Float?
-                if let pending = pendingEvent {
-                    echoRefTime = pending.timestamp
-                    echoRefDb = pending.classification.decibelLevel
-                } else {
-                    echoRefTime = lastConfirmedEventTime
-                    echoRefDb = lastConfirmedEventDb
-                }
-                
-                if let classification = self.classifier.classify(
-                    audioBuffer: audioEvent.buffer,
-                    previousConfirmedEventTime: lastConfirmedEventTime,
-                    recentLoudEventTime: echoRefTime,
-                    recentLoudEventDb: echoRefDb,
-                    currentTime: currentTime
-                ) {
-                    // Check if this is within the merge window of a pending event
-                    if let pendingStart = pendingEventStartTime, (currentTime - pendingStart) < eventMergeWindow {
-                        // Within merge window - update pending event if this is louder
-                        if let pending = pendingEvent {
-                            if classification.decibelLevel > pending.classification.decibelLevel {
-                                pendingEvent = TestAnalysisResult(
-                                    timestamp: currentTime,
-                                    classification: classification
-                                )
-                            }
+                // Check if this is within the merge window of a pending event
+                if let pendingStart = pendingEventStartTime, (currentTime - pendingStart) < self.eventMergeWindow {
+                    // Within merge window - update pending event if this is louder
+                    if let pending = pendingEvent {
+                        if footstepEvent.classification.decibelLevel > pending.classification.decibelLevel {
+                            pendingEvent = TestAnalysisResult(
+                                timestamp: currentTime,
+                                classification: footstepEvent.classification
+                            )
                         }
-                    } else {
-                        // Outside merge window - confirm pending event and start new one
-                        if let pending = pendingEvent {
-                            results.append(pending)
-                            lastConfirmedEventTime = pending.timestamp
-                            lastConfirmedEventDb = pending.classification.decibelLevel
-                        }
-                        pendingEvent = TestAnalysisResult(
-                            timestamp: currentTime,
-                            classification: classification
-                        )
-                        pendingEventStartTime = currentTime
                     }
+                } else {
+                    // Outside merge window - confirm pending event and start new one
+                    if let pending = pendingEvent {
+                        results.append(pending)
+                    }
+                    pendingEvent = TestAnalysisResult(
+                        timestamp: currentTime,
+                        classification: footstepEvent.classification
+                    )
+                    pendingEventStartTime = currentTime
                 }
             }
             .store(in: &cancellables)
@@ -244,7 +160,7 @@ final class AudioFileAnalysisTests: XCTestCase {
             throw NSError(domain: "AudioFileAnalysisTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"])
         }
         
-        // Process all buffers through NoiseAnalyzer
+        // Process all buffers through the production AnalysisService
         while currentFrame < totalFrames {
             let framesToRead = min(bufferSize, AVAudioFrameCount(totalFrames - AVAudioFrameCount(currentFrame)))
             
@@ -253,14 +169,8 @@ final class AudioFileAnalysisTests: XCTestCase {
             
             let currentTime = Double(currentFrame) / Double(sampleRate)
             
-            // Calculate RMS for debugging
-            if let channelData = buffer.floatChannelData?[0] {
-                let rms = noiseAnalyzer.calculateRMS(channelData, frameCount: Int(buffer.frameLength))
-                allRmsValues.append(rms)
-            }
-            
-            // Feed buffer through NoiseAnalyzer (like real-time does)
-            noiseAnalyzer.analyze(buffer: buffer, timestamp: currentTime)
+            // Feed buffer through the production pipeline
+            analysisService.processBuffer(buffer, timestamp: currentTime)
             
             currentFrame += AVAudioFramePosition(framesToRead)
         }
@@ -270,124 +180,8 @@ final class AudioFileAnalysisTests: XCTestCase {
             results.append(pending)
         }
         
-        // Print RMS statistics for calibration
-        printRmsStatistics(allRmsValues: allRmsValues, detectedRmsValues: detectedRmsValues, fileURL: url)
-        
-        return results
-    }
-    
-    private func printRmsStatistics(allRmsValues: [Float], detectedRmsValues: [Float], fileURL: URL) {
-        guard !allRmsValues.isEmpty else { return }
-        
-        let sortedRms = allRmsValues.sorted()
-        let maxRms = sortedRms.last ?? 0
-        let minRms = sortedRms.first ?? 0
-        let medianRms = sortedRms[sortedRms.count / 2]
-        let avgRms = allRmsValues.reduce(0, +) / Float(allRmsValues.count)
-        
-        // Calculate percentiles
-        let p90Index = Int(Float(sortedRms.count) * 0.90)
-        let p95Index = Int(Float(sortedRms.count) * 0.95)
-        let p99Index = Int(Float(sortedRms.count) * 0.99)
-        let p90 = sortedRms[min(p90Index, sortedRms.count - 1)]
-        let p95 = sortedRms[min(p95Index, sortedRms.count - 1)]
-        let p99 = sortedRms[min(p99Index, sortedRms.count - 1)]
-        
-        print("\n" + String(repeating: "-", count: 60))
-        print("RMS STATISTICS FOR: \(fileURL.lastPathComponent)")
-        print(String(repeating: "-", count: 60))
-        print("Total buffers analyzed: \(allRmsValues.count)")
-        print("Buffers passed NoiseAnalyzer: \(detectedRmsValues.count)")
-        print("Current detection threshold: \(noiseAnalyzer.detectionThreshold)")
-        print("")
-        print("RMS Range: \(String(format: "%.6f", minRms)) - \(String(format: "%.6f", maxRms))")
-        print("RMS Average: \(String(format: "%.6f", avgRms))")
-        print("RMS Median: \(String(format: "%.6f", medianRms))")
-        print("RMS 90th percentile: \(String(format: "%.6f", p90))")
-        print("RMS 95th percentile: \(String(format: "%.6f", p95))")
-        print("RMS 99th percentile: \(String(format: "%.6f", p99))")
-        print("")
-        print("RECOMMENDATION: Set detectionThreshold between \(String(format: "%.4f", medianRms)) and \(String(format: "%.4f", p90))")
-        print(String(repeating: "-", count: 60))
-    }
-    
-    private func analyzeAudioFile(at url: URL) throws -> [TestAnalysisResult] {
-        let audioFile = try AVAudioFile(forReading: url)
-        let format = audioFile.processingFormat
-        let sampleRate = Float(format.sampleRate)
-        let totalFrames = AVAudioFrameCount(audioFile.length)
-        let bufferSize: AVAudioFrameCount = 4096
-        
-        var results: [TestAnalysisResult] = []
-        var currentFrame: AVAudioFramePosition = 0
-        var lastConfirmedEventTime: TimeInterval?
-        var lastConfirmedEventDb: Float?
-        var pendingEvent: TestAnalysisResult?
-        var pendingEventStartTime: TimeInterval?
-        
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: bufferSize) else {
-            throw NSError(domain: "AudioFileAnalysisTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"])
-        }
-        
-        while currentFrame < totalFrames {
-            let framesToRead = min(bufferSize, AVAudioFrameCount(totalFrames - AVAudioFrameCount(currentFrame)))
-            
-            audioFile.framePosition = currentFrame
-            try audioFile.read(into: buffer, frameCount: framesToRead)
-            
-            let currentTime = Double(currentFrame) / Double(sampleRate)
-            
-            // For echo detection, use the most recent event (pending or confirmed)
-            let echoRefTime: TimeInterval?
-            let echoRefDb: Float?
-            if let pending = pendingEvent {
-                echoRefTime = pending.timestamp
-                echoRefDb = pending.classification.decibelLevel
-            } else {
-                echoRefTime = lastConfirmedEventTime
-                echoRefDb = lastConfirmedEventDb
-            }
-            
-            if let classification = classifier.classify(
-                audioBuffer: buffer,
-                previousConfirmedEventTime: lastConfirmedEventTime,
-                recentLoudEventTime: echoRefTime,
-                recentLoudEventDb: echoRefDb,
-                currentTime: currentTime
-            ) {
-                // Check if this is within the merge window of a pending event
-                if let pendingStart = pendingEventStartTime, (currentTime - pendingStart) < eventMergeWindow {
-                    // Within merge window - update pending event if this is louder
-                    if let pending = pendingEvent {
-                        if classification.decibelLevel > pending.classification.decibelLevel {
-                            pendingEvent = TestAnalysisResult(
-                                timestamp: currentTime,
-                                classification: classification
-                            )
-                        }
-                    }
-                } else {
-                    // Outside merge window - confirm pending event and start new one
-                    if let pending = pendingEvent {
-                        results.append(pending)
-                        lastConfirmedEventTime = pending.timestamp
-                        lastConfirmedEventDb = pending.classification.decibelLevel
-                    }
-                    pendingEvent = TestAnalysisResult(
-                        timestamp: currentTime,
-                        classification: classification
-                    )
-                    pendingEventStartTime = currentTime
-                }
-            }
-            
-            currentFrame += AVAudioFramePosition(framesToRead)
-        }
-        
-        // Don't forget the last pending event
-        if let pending = pendingEvent {
-            results.append(pending)
-        }
+        // Stop analysis
+        analysisService.stopAnalysis()
         
         return results
     }

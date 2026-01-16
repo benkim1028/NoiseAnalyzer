@@ -42,19 +42,20 @@ final class SensitivitySettings: ObservableObject {
     /// Lower value = more sensitive
     /// Calibrated from real audio files: median RMS ~0.0025, 90th percentile ~0.0085
     var detectionThreshold: Float {
-        // Map sensitivity 0-1 to threshold 0.01-0.002 (inverted)
-        // At sensitivity 0.5, threshold is ~0.006 (between median and 90th percentile)
-        let minThreshold: Float = 0.002  // Most sensitive
-        let maxThreshold: Float = 0.01   // Least sensitive
+        // Map sensitivity 0-1 to threshold 0.012-0.003 (inverted)
+        // At sensitivity 0.5, threshold is ~0.0075
+        let minThreshold: Float = 0.003  // Most sensitive
+        let maxThreshold: Float = 0.012  // Least sensitive
         return maxThreshold - (sensitivity * (maxThreshold - minThreshold))
     }
     
     /// Minimum decibel level for NoiseClassifier
     /// Lower value = more sensitive
     var minimumDecibelLevel: Float {
-        // Map sensitivity 0-1 to dB 55-35 (inverted)
-        let minDb: Float = 35.0
-        let maxDb: Float = 55.0
+        // Map sensitivity 0-1 to dB 60-46 (inverted)
+        // At default sensitivity 0.5, threshold is 53 dB
+        let minDb: Float = 46.0
+        let maxDb: Float = 60.0
         return maxDb - (sensitivity * (maxDb - minDb))
     }
     

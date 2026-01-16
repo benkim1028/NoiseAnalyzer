@@ -67,6 +67,14 @@ final class AnalysisService: AnalysisServiceProtocol {
     private var lastEventTime: TimeInterval?
     private var lastEventDb: Float?
     
+    /// Track the loudest recent event for echo detection
+    /// This prevents loud stomps from being filtered as echoes of quieter sounds
+    private var recentLoudEventTime: TimeInterval?
+    private var recentLoudEventDb: Float?
+    
+    /// Time window for tracking loud events (seconds)
+    private let loudEventWindow: TimeInterval = 2.0
+    
     // MARK: - Initialization
     
     /// Initialize the analysis service with dependencies.
@@ -90,6 +98,8 @@ final class AnalysisService: AnalysisServiceProtocol {
         isAnalyzing = true
         lastEventTime = nil
         lastEventDb = nil
+        recentLoudEventTime = nil
+        recentLoudEventDb = nil
         
         // Reset the analyzer state for a new session
         noiseAnalyzer.reset()
@@ -107,6 +117,8 @@ final class AnalysisService: AnalysisServiceProtocol {
         currentSession = nil
         lastEventTime = nil
         lastEventDb = nil
+        recentLoudEventTime = nil
+        recentLoudEventDb = nil
         cancellables.removeAll()
     }
     
@@ -123,12 +135,18 @@ final class AnalysisService: AnalysisServiceProtocol {
         
         let currentTime = audioEvent.timestamp
         
+        // Expire the loud event reference if outside the window
+        if let loudTime = recentLoudEventTime, (currentTime - loudTime) > loudEventWindow {
+            recentLoudEventTime = nil
+            recentLoudEventDb = nil
+        }
+        
         // Classify the detected audio
         guard let classification = noiseClassifier.classify(
             audioBuffer: audioEvent.buffer,
             previousConfirmedEventTime: lastEventTime,
-            recentLoudEventTime: lastEventTime,
-            recentLoudEventDb: lastEventDb,
+            recentLoudEventTime: recentLoudEventTime,
+            recentLoudEventDb: recentLoudEventDb,
             currentTime: currentTime
         ) else {
             return // Sound didn't meet classification criteria
@@ -140,6 +158,12 @@ final class AnalysisService: AnalysisServiceProtocol {
         // Update last event tracking
         lastEventTime = currentTime
         lastEventDb = classification.decibelLevel
+        
+        // Update loud event tracking - only if this is louder than the current reference
+        if recentLoudEventDb == nil || classification.decibelLevel >= recentLoudEventDb! {
+            recentLoudEventTime = currentTime
+            recentLoudEventDb = classification.decibelLevel
+        }
         
         // Create a FootstepEvent from the classification
         let footstepEvent = FootstepEvent(
