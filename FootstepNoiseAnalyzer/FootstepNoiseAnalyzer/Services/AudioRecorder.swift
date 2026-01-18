@@ -18,6 +18,9 @@ protocol AudioRecorderProtocol: AnyObject {
     /// Whether recording is currently paused
     var isPaused: Bool { get }
     
+    /// Whether monitoring (live audio without recording) is active
+    var isMonitoring: Bool { get }
+    
     /// Current duration of the recording in seconds
     var currentDuration: TimeInterval { get }
     
@@ -42,6 +45,13 @@ protocol AudioRecorderProtocol: AnyObject {
     
     /// Resume a paused recording
     func resumeRecording()
+    
+    /// Start monitoring audio without recording to file
+    /// - Throws: AudioRecorderError if monitoring cannot be started
+    func startMonitoring() async throws
+    
+    /// Stop monitoring audio
+    func stopMonitoring()
 }
 
 /// Implementation of AudioRecorderProtocol using AVAudioEngine.
@@ -51,6 +61,7 @@ final class AudioRecorder: AudioRecorderProtocol {
     
     private(set) var isRecording: Bool = false
     private(set) var isPaused: Bool = false
+    private(set) var isMonitoring: Bool = false
     
     var currentDuration: TimeInterval {
         guard let startTime = recordingStartTime else { return 0 }
@@ -95,6 +106,11 @@ final class AudioRecorder: AudioRecorderProtocol {
             throw AudioRecorderError.recordingAlreadyInProgress
         }
         
+        // Stop monitoring if active (we'll start recording instead)
+        if isMonitoring {
+            stopMonitoring()
+        }
+        
         // Request microphone permission
         let permissionGranted = await requestMicrophonePermission()
         guard permissionGranted else {
@@ -125,7 +141,7 @@ final class AudioRecorder: AudioRecorderProtocol {
         }
         
         // Install tap on input node for audio processing
-        installAudioTap(on: inputNode, format: recordingFormat)
+        installAudioTap(on: inputNode, format: recordingFormat, writeToFile: true)
         
         // Start the audio engine
         do {
@@ -219,6 +235,46 @@ final class AudioRecorder: AudioRecorderProtocol {
             print("Failed to resume recording: \(error.localizedDescription)")
         }
     }
+    
+    func startMonitoring() async throws {
+        guard !isRecording && !isMonitoring else { return }
+        
+        // Request microphone permission
+        let permissionGranted = await requestMicrophonePermission()
+        guard permissionGranted else {
+            throw AudioRecorderError.microphonePermissionDenied
+        }
+        
+        // Configure audio session
+        try configureAudioSession()
+        
+        // Set up audio tap without file writing
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        
+        // Install tap on input node for audio processing (no file writing)
+        installAudioTap(on: inputNode, format: recordingFormat, writeToFile: false)
+        
+        // Start the audio engine
+        do {
+            try audioEngine.start()
+            isMonitoring = true
+        } catch {
+            removeTap()
+            throw AudioRecorderError.audioEngineStartFailed(underlying: error)
+        }
+    }
+    
+    func stopMonitoring() {
+        guard isMonitoring else { return }
+        
+        audioEngine.stop()
+        removeTap()
+        isMonitoring = false
+        
+        // Deactivate audio session
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
 
     
     // MARK: - Private Methods
@@ -274,12 +330,12 @@ final class AudioRecorder: AudioRecorderProtocol {
     }
     
     /// Install audio tap on the input node for processing.
-    private func installAudioTap(on inputNode: AVAudioInputNode, format: AVAudioFormat) {
+    private func installAudioTap(on inputNode: AVAudioInputNode, format: AVAudioFormat, writeToFile: Bool) {
         inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
             guard let self = self, !self.isPaused else { return }
             
-            // Write to file
-            if let audioFile = self.audioFile {
+            // Write to file only if recording (not monitoring)
+            if writeToFile, let audioFile = self.audioFile {
                 do {
                     try audioFile.write(from: buffer)
                 } catch {

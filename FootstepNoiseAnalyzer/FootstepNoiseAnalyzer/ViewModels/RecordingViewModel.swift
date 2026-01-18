@@ -22,6 +22,9 @@ final class RecordingViewModel: ObservableObject {
     /// Whether recording is currently paused
     @Published private(set) var isPaused: Bool = false
     
+    /// Whether monitoring (live audio without recording) is active
+    @Published private(set) var isMonitoring: Bool = false
+    
     /// Current duration of the recording in seconds
     @Published private(set) var currentDuration: TimeInterval = 0
     
@@ -69,7 +72,7 @@ final class RecordingViewModel: ObservableObject {
         if isRecording {
             return isPaused ? "Paused" : "Recording"
         }
-        return "Ready"
+        return isMonitoring ? "Monitoring" : "Ready"
     }
     
     // MARK: - Private Properties
@@ -94,6 +97,12 @@ final class RecordingViewModel: ObservableObject {
     func startRecording() {
         Task {
             do {
+                // Stop monitoring first if active
+                if isMonitoring {
+                    recordingService.stopMonitoring()
+                    isMonitoring = false
+                }
+                
                 _ = try await recordingService.startRecording()
                 isRecording = true
                 isPaused = false
@@ -115,7 +124,9 @@ final class RecordingViewModel: ObservableObject {
                 isPaused = false
                 stopDurationTimer()
                 currentDuration = 0
-                audioLevel = 0
+                
+                // Restart monitoring after recording stops
+                startMonitoring()
             } catch {
                 handleError(error)
             }
@@ -152,6 +163,32 @@ final class RecordingViewModel: ObservableObject {
         } else {
             pauseRecording()
         }
+    }
+    
+    /// Start monitoring audio without recording (called when view appears)
+    func startMonitoring() {
+        guard !isRecording && !isMonitoring else { return }
+        
+        Task {
+            do {
+                try await recordingService.startMonitoring()
+                isMonitoring = true
+            } catch {
+                // Don't show error for monitoring - it's optional
+                print("Failed to start monitoring: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Stop monitoring audio (called when view disappears)
+    func stopMonitoring() {
+        guard isMonitoring else { return }
+        
+        recordingService.stopMonitoring()
+        isMonitoring = false
+        audioLevel = 0
+        dominantFrequency = 0
+        spectralCentroid = 0
     }
     
     // MARK: - Private Methods

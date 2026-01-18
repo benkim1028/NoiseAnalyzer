@@ -19,6 +19,9 @@ protocol RecordingServiceProtocol: AnyObject {
     /// Whether recording is currently paused
     var isPaused: Bool { get }
     
+    /// Whether monitoring (live audio without recording) is active
+    var isMonitoring: Bool { get }
+    
     /// Current duration of the recording in seconds
     var currentDuration: TimeInterval { get }
     
@@ -50,6 +53,12 @@ protocol RecordingServiceProtocol: AnyObject {
     
     /// Resume a paused recording
     func resumeRecording()
+    
+    /// Start monitoring audio without recording
+    func startMonitoring() async throws
+    
+    /// Stop monitoring audio
+    func stopMonitoring()
 }
 
 /// Implementation of RecordingServiceProtocol coordinating audio recording and analysis.
@@ -63,6 +72,10 @@ final class RecordingService: RecordingServiceProtocol {
     
     var isPaused: Bool {
         audioRecorder.isPaused
+    }
+    
+    var isMonitoring: Bool {
+        audioRecorder.isMonitoring
     }
     
     var currentDuration: TimeInterval {
@@ -96,6 +109,7 @@ final class RecordingService: RecordingServiceProtocol {
     private let frequencyAnalyzer: FrequencyAnalyzer
     
     private var cancellables = Set<AnyCancellable>()
+    private var monitoringCancellables = Set<AnyCancellable>()
     private let eventCountSubject = CurrentValueSubject<Int, Never>(0)
     private let frequencySubject = PassthroughSubject<FrequencySpectrum, Never>()
     private var recordingStartTime: Date?
@@ -188,6 +202,27 @@ final class RecordingService: RecordingServiceProtocol {
     
     func resumeRecording() {
         audioRecorder.resumeRecording()
+    }
+    
+    func startMonitoring() async throws {
+        // Start audio monitoring (no file recording)
+        try await audioRecorder.startMonitoring()
+        
+        // Subscribe to audio buffers for frequency analysis only
+        audioRecorder.audioBufferPublisher
+            .sink { [weak self] buffer in
+                guard let self = self else { return }
+                // Perform frequency analysis and publish
+                if let spectrum = self.frequencyAnalyzer.analyze(buffer: buffer) {
+                    self.frequencySubject.send(spectrum)
+                }
+            }
+            .store(in: &monitoringCancellables)
+    }
+    
+    func stopMonitoring() {
+        monitoringCancellables.removeAll()
+        audioRecorder.stopMonitoring()
     }
     
     // MARK: - Private Methods

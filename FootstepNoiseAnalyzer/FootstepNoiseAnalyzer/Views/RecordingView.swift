@@ -25,7 +25,7 @@ struct RecordingView: View {
                         .foregroundColor(viewModel.isRecording ? .primary : .secondary)
                     
                     // Audio waveform visualization
-                    AudioWaveformView(audioLevel: viewModel.audioLevel, isRecording: viewModel.isRecording)
+                    AudioWaveformView(audioLevel: viewModel.audioLevel, isActive: viewModel.isRecording || viewModel.isMonitoring)
                         .frame(height: 120)
                         .padding(.horizontal)
                     
@@ -37,7 +37,7 @@ struct RecordingView: View {
                     FrequencyDisplayView(
                         dominantFrequency: viewModel.dominantFrequency,
                         spectralCentroid: viewModel.spectralCentroid,
-                        isRecording: viewModel.isRecording
+                        isActive: viewModel.isRecording || viewModel.isMonitoring
                     )
                     .padding(.horizontal)
                     
@@ -65,6 +65,12 @@ struct RecordingView: View {
                 .padding(.top, 20)
             }
             .navigationTitle("Record")
+            .onAppear {
+                viewModel.startMonitoring()
+            }
+            .onDisappear {
+                viewModel.stopMonitoring()
+            }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -199,6 +205,8 @@ struct StatusBadge: View {
             return .red
         case "Paused":
             return .orange
+        case "Monitoring":
+            return .blue
         default:
             return .green
         }
@@ -210,7 +218,7 @@ struct StatusBadge: View {
 /// Displays a visual representation of the audio level
 struct AudioWaveformView: View {
     let audioLevel: Float
-    let isRecording: Bool
+    let isActive: Bool
     
     private let barCount = 40
     
@@ -220,7 +228,7 @@ struct AudioWaveformView: View {
                 ForEach(0..<barCount, id: \.self) { index in
                     WaveformBar(
                         height: barHeight(for: index, in: geometry.size.height),
-                        isActive: isRecording
+                        isActive: isActive
                     )
                 }
             }
@@ -228,7 +236,7 @@ struct AudioWaveformView: View {
     }
     
     private func barHeight(for index: Int, in maxHeight: CGFloat) -> CGFloat {
-        guard isRecording else {
+        guard isActive else {
             return maxHeight * 0.1
         }
         
@@ -352,10 +360,10 @@ struct DecibelLevelView: View {
 struct FrequencyDisplayView: View {
     let dominantFrequency: Float
     let spectralCentroid: Float
-    let isRecording: Bool
+    let isActive: Bool
     
     private var frequencyBand: String {
-        guard isRecording && dominantFrequency > 0 else { return "—" }
+        guard isActive && dominantFrequency > 0 else { return "—" }
         
         if dominantFrequency < 100 {
             return "Sub-bass (Impact)"
@@ -371,7 +379,7 @@ struct FrequencyDisplayView: View {
     }
     
     private var bandColor: Color {
-        guard isRecording && dominantFrequency > 0 else { return .secondary }
+        guard isActive && dominantFrequency > 0 else { return .secondary }
         
         if dominantFrequency < 100 {
             return .red
@@ -401,7 +409,7 @@ struct FrequencyDisplayView: View {
                     Text("Dominant")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Text(isRecording && dominantFrequency > 0 ? "\(Int(dominantFrequency)) Hz" : "— Hz")
+                    Text(isActive && dominantFrequency > 0 ? "\(Int(dominantFrequency)) Hz" : "— Hz")
                         .font(.system(.body, design: .monospaced))
                         .fontWeight(.semibold)
                         .foregroundColor(bandColor)
@@ -413,7 +421,7 @@ struct FrequencyDisplayView: View {
                     Text("Centroid")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Text(isRecording && spectralCentroid > 0 ? "\(Int(spectralCentroid)) Hz" : "— Hz")
+                    Text(isActive && spectralCentroid > 0 ? "\(Int(spectralCentroid)) Hz" : "— Hz")
                         .font(.system(.body, design: .monospaced))
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
