@@ -52,16 +52,15 @@ final class SensitivitySettings: ObservableObject {
     /// Minimum decibel level for NoiseClassifier
     /// Lower value = more sensitive
     var minimumDecibelLevel: Float {
-        // Map sensitivity 0-1 to dB 79-65 (inverted)
-        // At default sensitivity 0.5, threshold is 72 dB
-        // Adjusted +19 dB for new calibration (was 60-46)
-        let minDb: Float = 65.0
-        let maxDb: Float = 79.0
+        // Map sensitivity 0-1 to dB 60-46 (inverted)
+        // At default sensitivity 0.5, threshold is 53 dB
+        let minDb: Float = 46.0
+        let maxDb: Float = 60.0
         return maxDb - (sensitivity * (maxDb - minDb))
     }
     
     /// Total dBFS to dB SPL offset including user calibration
-    /// Base offset of 94 dB + user calibration adjustment
+    /// Base offset of 75 dB + user calibration adjustment
     var effectiveDbOffset: Float {
         return DecibelCalculator.baseDbFSToSPLOffset + calibrationOffset
     }

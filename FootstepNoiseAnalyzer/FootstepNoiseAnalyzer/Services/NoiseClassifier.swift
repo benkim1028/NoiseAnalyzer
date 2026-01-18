@@ -71,10 +71,10 @@ struct ClassifierConfig {
     
     static let `default` = ClassifierConfig(
         lowFrequencyThreshold: 500,      // Hz - footsteps typically below 500 Hz
-        mildToMediumDb: 75,              // dB SPL - normal walking (was 56, +19 for new calibration)
-        mediumToHardDb: 81,              // dB SPL - heavy walking (was 62, +19 for new calibration)
+        mildToMediumDb: 56,              // dB SPL - normal walking
+        mediumToHardDb: 62,              // dB SPL - heavy walking
         runningIntervalThreshold: 0.15,  // seconds - very short interval for running
-        minimumDecibelLevel: 69,         // dB SPL - ignore ambient noise (was 50, +19 for new calibration)
+        minimumDecibelLevel: 50,         // dB SPL - ignore ambient noise
         echoWindowSeconds: 1.5,          // seconds - window to detect echoes (increased for reverb)
         echoDbDropThreshold: 8.0         // dB - drop threshold to identify echo (lowered to catch more echoes)
     )
