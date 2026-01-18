@@ -359,4 +359,16 @@ final class MockAudioRecorder: AudioRecorderProtocol {
             currentSession = session
         }
     }
+    
+    // MARK: - Monitoring (stub implementation for protocol conformance)
+    
+    private(set) var isMonitoring: Bool = false
+    
+    func startMonitoring() async throws {
+        isMonitoring = true
+    }
+    
+    func stopMonitoring() {
+        isMonitoring = false
+    }
 }
