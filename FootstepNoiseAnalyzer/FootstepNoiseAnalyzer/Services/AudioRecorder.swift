@@ -310,6 +310,16 @@ final class AudioRecorder: AudioRecorderProtocol {
                 options: [.allowBluetooth, .defaultToSpeaker, .mixWithOthers]
             )
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            
+            // Maximize input gain for better audio capture
+            if session.isInputGainSettable {
+                try session.setInputGain(1.0)  // Maximum gain (0.0 to 1.0)
+            }
+            
+            // Set preferred input to built-in mic if available for consistent levels
+            if let builtInMic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                try session.setPreferredInput(builtInMic)
+            }
         } catch {
             throw AudioRecorderError.audioSessionConfigurationFailed(underlying: error)
         }
