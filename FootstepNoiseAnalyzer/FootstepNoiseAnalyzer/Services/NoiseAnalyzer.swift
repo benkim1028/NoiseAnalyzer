@@ -63,8 +63,6 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
     // MARK: - Private Properties
     
     private let detectionSubject = PassthroughSubject<AudioEvent, Never>()
-    private let sensitivitySettings: SensitivitySettings
-    private var cancellables = Set<AnyCancellable>()
     
     /// Minimum time interval between detected events (in seconds)
     /// Calibrated to prevent detecting echoes and reverberations as separate events
@@ -80,19 +78,14 @@ final class NoiseAnalyzer: NoiseAnalyzerProtocol {
     /// Calibrated based on real audio files where max RMS ~0.07
     private let minimumPeakProminence: Float = 0.005
     
+    /// Default detection threshold (RMS amplitude)
+    /// Set low to catch all potential events; classification handles filtering
+    private static let defaultThreshold: Float = 0.002
+    
     // MARK: - Initialization
     
-    init(threshold: Float? = nil, sensitivitySettings: SensitivitySettings = .shared) {
-        self.sensitivitySettings = sensitivitySettings
-        self.detectionThreshold = threshold ?? sensitivitySettings.detectionThreshold
-        
-        // Subscribe to sensitivity changes
-        sensitivitySettings.$sensitivity
-            .dropFirst()
-            .sink { [weak self] _ in
-                self?.detectionThreshold = sensitivitySettings.detectionThreshold
-            }
-            .store(in: &cancellables)
+    init(threshold: Float? = nil) {
+        self.detectionThreshold = threshold ?? NoiseAnalyzer.defaultThreshold
     }
     
     // MARK: - Public Methods

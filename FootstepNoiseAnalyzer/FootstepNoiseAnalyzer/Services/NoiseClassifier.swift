@@ -59,17 +59,8 @@ struct ClassifierConfig {
     /// Events at exactly the frequency threshold need higher dB to be considered footsteps
     let boundaryFrequencyMinDb: Float
     
-    /// Decibel threshold between mild and medium stomping
-    let mildToMediumDb: Float
-    
-    /// Decibel threshold between medium and hard stomping
-    let mediumToHardDb: Float
-    
     /// Maximum interval (seconds) between steps to classify as running
     let runningIntervalThreshold: TimeInterval
-    
-    /// Minimum decibel level to consider as a valid footstep
-    let minimumDecibelLevel: Float
     
     /// Time window (seconds) to consider for echo detection
     let echoWindowSeconds: TimeInterval
@@ -79,12 +70,9 @@ struct ClassifierConfig {
     
     static let `default` = ClassifierConfig(
         lowFrequencyThreshold: 65,       // Hz - footsteps typically have dominant freq at or below 65 Hz
-        minimumImpactEnergyRatio: 0.30,  // Impact band must be at least 30% of total energy
+        minimumImpactEnergyRatio: 0.70,  // Impact band must be at least 70% of total energy (stomping is 74-95%)
         boundaryFrequencyMinDb: 38.0,    // dB - events at 60-70 Hz need at least 38 dB
-        mildToMediumDb: 40,              // dB SPL - normal walking (calibrated for 75 dB offset)
-        mediumToHardDb: 43,              // dB SPL - heavy walking (calibrated for 75 dB offset)
         runningIntervalThreshold: 0.15,  // seconds - very short interval for running
-        minimumDecibelLevel: 32,         // dB SPL - ignore ambient noise (lowered to capture more events)
         echoWindowSeconds: 0.5,          // seconds - reduced echo window to capture more events
         echoDbDropThreshold: 12.0        // dB - increased drop threshold to be less aggressive
     )
@@ -99,19 +87,31 @@ final class NoiseClassifier: NoiseClassifierProtocol {
     private let config: ClassifierConfig
     private let sampleRate: Float
     private let sensitivitySettings: SensitivitySettings
+    private let ambientTracker: AmbientLevelTracker
     
     // MARK: - Initialization
     
-    init(config: ClassifierConfig = .default, sampleRate: Float = 44100, sensitivitySettings: SensitivitySettings = .shared) {
+    init(
+        config: ClassifierConfig = .default,
+        sampleRate: Float = 44100,
+        sensitivitySettings: SensitivitySettings = .shared,
+        ambientTracker: AmbientLevelTracker = .shared
+    ) {
         self.config = config
         self.sampleRate = sampleRate
         self.sensitivitySettings = sensitivitySettings
+        self.ambientTracker = ambientTracker
         self.frequencyAnalyzer = FrequencyAnalyzer(fftSize: 2048, sampleRate: sampleRate)
     }
     
-    /// Current minimum decibel level based on sensitivity settings
+    /// Get current thresholds based on ambient level and sensitivity
+    private var currentThresholds: (mild: Float, medium: Float, hard: Float, extreme: Float) {
+        sensitivitySettings.getThresholds(ambientLevel: ambientTracker.ambientLevel)
+    }
+    
+    /// Current minimum decibel level (mild threshold)
     private var effectiveMinimumDecibelLevel: Float {
-        sensitivitySettings.minimumDecibelLevel
+        currentThresholds.mild
     }
     
     // MARK: - Public Methods
@@ -208,20 +208,39 @@ final class NoiseClassifier: NoiseClassifierProtocol {
             return (.unknown, 0.3)
         }
         
-        // Determine base stomping type from decibel level
+        // Get current thresholds based on ambient level
+        let thresholds = currentThresholds
+        
+        // Determine base stomping type from decibel level using ambient-relative thresholds
+        // Mild: ambient + 5 to ambient + 10
+        // Medium: ambient + 10 to ambient + 15
+        // Hard: ambient + 15 to ambient + 20
+        // Extreme: ambient + 20+
         let baseType: FootstepType
         let baseConfidence: Float
         
-        if decibelLevel < config.mildToMediumDb {
+        if decibelLevel < thresholds.medium {
+            // Mild stomping (ambient + 5 to ambient + 10)
             baseType = .mildStomping
-            baseConfidence = 0.7 + (decibelLevel / config.mildToMediumDb) * 0.2
-        } else if decibelLevel < config.mediumToHardDb {
+            let range = thresholds.medium - thresholds.mild
+            let normalized = (decibelLevel - thresholds.mild) / range
+            baseConfidence = 0.7 + normalized * 0.15
+        } else if decibelLevel < thresholds.hard {
+            // Medium stomping (ambient + 10 to ambient + 15)
             baseType = .mediumStomping
-            let normalized = (decibelLevel - config.mildToMediumDb) / (config.mediumToHardDb - config.mildToMediumDb)
-            baseConfidence = 0.75 + normalized * 0.15
-        } else {
+            let range = thresholds.hard - thresholds.medium
+            let normalized = (decibelLevel - thresholds.medium) / range
+            baseConfidence = 0.75 + normalized * 0.1
+        } else if decibelLevel < thresholds.extreme {
+            // Hard stomping (ambient + 15 to ambient + 20)
             baseType = .hardStomping
-            baseConfidence = min(0.95, 0.8 + (decibelLevel - config.mediumToHardDb) / 50 * 0.15)
+            let range = thresholds.extreme - thresholds.hard
+            let normalized = (decibelLevel - thresholds.hard) / range
+            baseConfidence = 0.8 + normalized * 0.1
+        } else {
+            // Extreme stomping (ambient + 20+)
+            baseType = .extremeStomping
+            baseConfidence = min(0.95, 0.85 + (decibelLevel - thresholds.extreme) / 20 * 0.1)
         }
         
         // Check if this is running (short interval between steps)

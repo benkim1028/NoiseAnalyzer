@@ -61,6 +61,7 @@ final class AnalysisService: AnalysisServiceProtocol {
     
     private let noiseAnalyzer: NoiseAnalyzerProtocol
     private let noiseClassifier: NoiseClassifierProtocol
+    private let ambientTracker: AmbientLevelTracker
     private let detectedEventSubject = PassthroughSubject<DetectedFootstepEvent, Never>()
     private var cancellables = Set<AnyCancellable>()
     private var currentSession: RecordingSession?
@@ -81,12 +82,15 @@ final class AnalysisService: AnalysisServiceProtocol {
     /// - Parameters:
     ///   - noiseAnalyzer: The noise analyzer for detecting audio events
     ///   - noiseClassifier: The classifier for categorizing detected sounds
+    ///   - ambientTracker: The ambient level tracker for dynamic thresholds
     init(
         noiseAnalyzer: NoiseAnalyzerProtocol = NoiseAnalyzer(),
-        noiseClassifier: NoiseClassifierProtocol = NoiseClassifier()
+        noiseClassifier: NoiseClassifierProtocol = NoiseClassifier(),
+        ambientTracker: AmbientLevelTracker = .shared
     ) {
         self.noiseAnalyzer = noiseAnalyzer
         self.noiseClassifier = noiseClassifier
+        self.ambientTracker = ambientTracker
     }
     
     // MARK: - Public Methods
@@ -103,6 +107,9 @@ final class AnalysisService: AnalysisServiceProtocol {
         
         // Reset the analyzer state for a new session
         noiseAnalyzer.reset()
+        
+        // Reset ambient tracker for new session
+        ambientTracker.reset()
         
         // Subscribe to detection events from the noise analyzer
         noiseAnalyzer.detectionPublisher
@@ -124,6 +131,11 @@ final class AnalysisService: AnalysisServiceProtocol {
     
     func processBuffer(_ buffer: AVAudioPCMBuffer, timestamp: TimeInterval) {
         guard isAnalyzing else { return }
+        
+        // Feed buffer to ambient tracker for level estimation
+        ambientTracker.addReading(from: buffer)
+        
+        // Process through noise analyzer
         noiseAnalyzer.analyze(buffer: buffer, timestamp: timestamp)
     }
     

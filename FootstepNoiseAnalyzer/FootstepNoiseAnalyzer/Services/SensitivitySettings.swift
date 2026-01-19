@@ -9,7 +9,16 @@ import Foundation
 import Combine
 
 /// Manages sensitivity settings for footstep detection.
-/// Higher sensitivity = lower thresholds = detects quieter sounds.
+/// 
+/// - Sensitivity: dB offset that shifts all stomping classification thresholds relative to ambient.
+///   Positive values = need louder sounds (less sensitive), Negative = quieter sounds detected (more sensitive)
+/// - Calibration: Adjusts dBFS to dB SPL conversion for microphone differences.
+///
+/// Classification is relative to ambient noise level:
+/// - Mild: ambient + 5 + sensitivity to ambient + 10 + sensitivity
+/// - Medium: ambient + 10 + sensitivity to ambient + 15 + sensitivity
+/// - Hard: ambient + 15 + sensitivity to ambient + 20 + sensitivity
+/// - Extreme: ambient + 20 + sensitivity and above
 final class SensitivitySettings: ObservableObject {
     
     // MARK: - Singleton
@@ -18,46 +27,49 @@ final class SensitivitySettings: ObservableObject {
     
     // MARK: - Published Properties
     
-    /// Sensitivity level from 0.0 (least sensitive) to 1.0 (most sensitive)
-    /// Default is 0.5 (medium sensitivity)
-    @Published var sensitivity: Float {
+    /// Sensitivity offset in dB (-10 to +10)
+    /// Shifts all stomping classification thresholds relative to ambient.
+    /// Positive = less sensitive (need louder sounds), Negative = more sensitive (quieter sounds detected)
+    /// Default is 0
+    @Published var sensitivityOffset: Float {
         didSet {
-            UserDefaults.standard.set(sensitivity, forKey: sensitivityKey)
+            let clamped = max(-10, min(10, sensitivityOffset))
+            if clamped != sensitivityOffset {
+                sensitivityOffset = clamped
+            }
+            UserDefaults.standard.set(sensitivityOffset, forKey: sensitivityKey)
         }
     }
     
     /// Microphone calibration offset in dB (-20 to +20)
-    /// Adjusts the dBFS to dB SPL conversion to match real-world readings.
-    /// Increase if readings are too low, decrease if too high.
+    /// Adjusts the dBFS to dB SPL conversion for microphone hardware differences.
+    /// Increase if readings seem too low, decrease if too high.
     /// Default is 0 (no adjustment from base offset)
     @Published var calibrationOffset: Float {
         didSet {
+            let clamped = max(-20, min(20, calibrationOffset))
+            if clamped != calibrationOffset {
+                calibrationOffset = clamped
+            }
             UserDefaults.standard.set(calibrationOffset, forKey: calibrationKey)
         }
     }
     
+    // MARK: - Classification Offsets (relative to ambient)
+    
+    /// Offset from ambient for mild stomping threshold
+    static let mildOffset: Float = 5.0
+    
+    /// Offset from ambient for medium stomping threshold
+    static let mediumOffset: Float = 10.0
+    
+    /// Offset from ambient for hard stomping threshold
+    static let hardOffset: Float = 15.0
+    
+    /// Offset from ambient for extreme stomping threshold
+    static let extremeOffset: Float = 20.0
+    
     // MARK: - Computed Properties
-    
-    /// Detection threshold for NoiseAnalyzer (RMS amplitude)
-    /// Lower value = more sensitive
-    /// Calibrated from real audio files: median RMS ~0.0025, 90th percentile ~0.0085
-    var detectionThreshold: Float {
-        // Map sensitivity 0-1 to threshold 0.01-0.002 (inverted)
-        // At sensitivity 0.5, threshold is ~0.006 (between median and 90th percentile)
-        let minThreshold: Float = 0.002  // Most sensitive
-        let maxThreshold: Float = 0.01   // Least sensitive
-        return maxThreshold - (sensitivity * (maxThreshold - minThreshold))
-    }
-    
-    /// Minimum decibel level for NoiseClassifier
-    /// Lower value = more sensitive
-    var minimumDecibelLevel: Float {
-        // Map sensitivity 0-1 to dB 40-26 (inverted, calibrated for 75 dB offset)
-        // At sensitivity 0.5, threshold is 33 dB
-        let minDb: Float = 26.0
-        let maxDb: Float = 40.0
-        return maxDb - (sensitivity * (maxDb - minDb))
-    }
     
     /// Total dBFS to dB SPL offset including user calibration
     /// Base offset of 75 dB + user calibration adjustment
@@ -67,15 +79,12 @@ final class SensitivitySettings: ObservableObject {
     
     /// Human-readable sensitivity label
     var sensitivityLabel: String {
-        switch sensitivity {
-        case 0..<0.25:
-            return "Low"
-        case 0.25..<0.5:
-            return "Medium-Low"
-        case 0.5..<0.75:
-            return "Medium-High"
-        default:
-            return "High"
+        if sensitivityOffset > 0 {
+            return "Less Sensitive (+\(Int(sensitivityOffset)) dB)"
+        } else if sensitivityOffset < 0 {
+            return "More Sensitive (\(Int(sensitivityOffset)) dB)"
+        } else {
+            return "Normal (0 dB)"
         }
     }
     
@@ -90,7 +99,7 @@ final class SensitivitySettings: ObservableObject {
     
     // MARK: - Private Properties
     
-    private let sensitivityKey = "footstep_detection_sensitivity"
+    private let sensitivityKey = "footstep_sensitivity_offset"
     private let calibrationKey = "microphone_calibration_offset"
     
     // MARK: - Initialization
@@ -98,9 +107,9 @@ final class SensitivitySettings: ObservableObject {
     private init() {
         // Load saved sensitivity or use default
         if UserDefaults.standard.object(forKey: sensitivityKey) != nil {
-            self.sensitivity = UserDefaults.standard.float(forKey: sensitivityKey)
+            self.sensitivityOffset = UserDefaults.standard.float(forKey: sensitivityKey)
         } else {
-            self.sensitivity = 0.5 // Default medium sensitivity
+            self.sensitivityOffset = 0.0 // Default no offset
         }
         
         // Load saved calibration or use default
@@ -113,9 +122,22 @@ final class SensitivitySettings: ObservableObject {
     
     // MARK: - Methods
     
+    /// Get classification thresholds based on ambient level and sensitivity.
+    /// - Parameter ambientLevel: The current ambient noise level in dB SPL
+    /// - Returns: Tuple of (mild, medium, hard, extreme) thresholds
+    func getThresholds(ambientLevel: Float) -> (mild: Float, medium: Float, hard: Float, extreme: Float) {
+        let base = ambientLevel + sensitivityOffset
+        return (
+            mild: base + SensitivitySettings.mildOffset,
+            medium: base + SensitivitySettings.mediumOffset,
+            hard: base + SensitivitySettings.hardOffset,
+            extreme: base + SensitivitySettings.extremeOffset
+        )
+    }
+    
     /// Reset sensitivity to default value
     func resetToDefault() {
-        sensitivity = 0.5
+        sensitivityOffset = 0.0
     }
     
     /// Reset calibration to default value

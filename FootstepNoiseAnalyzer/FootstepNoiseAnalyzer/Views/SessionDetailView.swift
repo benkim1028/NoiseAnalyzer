@@ -351,6 +351,8 @@ struct EventRowView: View {
             return "figure.walk"
         case .hardStomping:
             return "figure.walk.circle.fill"
+        case .extremeStomping:
+            return "figure.walk.diamond.fill"
         case .running:
             return "figure.run"
         case .unknown:
@@ -366,8 +368,10 @@ struct EventRowView: View {
             return .orange
         case .hardStomping:
             return .red
-        case .running:
+        case .extremeStomping:
             return .purple
+        case .running:
+            return .blue
         case .unknown:
             return .gray
         }

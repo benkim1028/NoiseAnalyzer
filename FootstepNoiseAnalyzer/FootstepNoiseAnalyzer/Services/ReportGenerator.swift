@@ -671,8 +671,10 @@ class ReportGenerator: ReportGeneratorProtocol {
             return .systemOrange
         case .hardStomping:
             return .systemRed
-        case .running:
+        case .extremeStomping:
             return .systemPurple
+        case .running:
+            return .systemBlue
         case .unknown:
             return .systemGray
         }

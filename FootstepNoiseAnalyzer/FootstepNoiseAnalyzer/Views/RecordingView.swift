@@ -105,19 +105,21 @@ struct SensitivitySliderView: View {
                 }
                 
                 HStack(spacing: 12) {
-                    Image(systemName: "speaker.wave.1")
-                        .font(.caption)
+                    Text("-10")
+                        .font(.caption2)
                         .foregroundColor(.secondary)
+                        .frame(width: 24)
                     
-                    Slider(value: $sensitivitySettings.sensitivity, in: 0...1, step: 0.05)
+                    Slider(value: $sensitivitySettings.sensitivityOffset, in: -10...10, step: 1)
                         .tint(.blue)
                     
-                    Image(systemName: "speaker.wave.3")
-                        .font(.caption)
+                    Text("+10")
+                        .font(.caption2)
                         .foregroundColor(.secondary)
+                        .frame(width: 24)
                 }
                 
-                Text("Adjust to detect quieter or louder footsteps")
+                Text("Adjusts thresholds relative to ambient noise")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -154,7 +156,7 @@ struct SensitivitySliderView: View {
                         .frame(width: 24)
                 }
                 
-                Text("Adjust until ambient sound shows 30-40 dB")
+                Text("Adjusts overall audio level reading")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -532,6 +534,8 @@ struct LastEventCard: View {
             return "figure.walk"
         case .hardStomping:
             return "figure.walk.circle.fill"
+        case .extremeStomping:
+            return "figure.walk.diamond.fill"
         case .running:
             return "figure.run"
         case .unknown:
@@ -547,8 +551,10 @@ struct LastEventCard: View {
             return .orange
         case .hardStomping:
             return .red
-        case .running:
+        case .extremeStomping:
             return .purple
+        case .running:
+            return .blue
         case .unknown:
             return .gray
         }

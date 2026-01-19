@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E01000063 /* SpectralAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000063 /* SpectralAnalysisTests.swift */; };
+		E01000062 /* AmbientLevelTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000062 /* AmbientLevelTracker.swift */; };
 		E01000061 /* SensitivitySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000061 /* SensitivitySettings.swift */; };
 		E01000060 /* AudioFileAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000060 /* AudioFileAnalysisTests.swift */; };
 		E01000001 /* FootstepNoiseAnalyzerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02000001 /* FootstepNoiseAnalyzerApp.swift */; };
@@ -81,6 +83,7 @@
 		E0200001E /* ReportGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportGenerator.swift; sourceTree = "<group>"; };
 		E02000020 /* FootstepNoiseAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootstepNoiseAnalyzerTests.swift; sourceTree = "<group>"; };
 		E02000060 /* AudioFileAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFileAnalysisTests.swift; sourceTree = "<group>"; };
+		E02000063 /* SpectralAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectralAnalysisTests.swift; sourceTree = "<group>"; };
 		E02000021 /* FootstepNoiseAnalyzerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FootstepNoiseAnalyzerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E02000030 /* RecordingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingViewModel.swift; sourceTree = "<group>"; };
 		E02000031 /* SessionListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListViewModel.swift; sourceTree = "<group>"; };
@@ -92,6 +95,7 @@
 		E02000043 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		E02000050 /* FrequencyAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyAnalyzer.swift; sourceTree = "<group>"; };
 		E02000061 /* SensitivitySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivitySettings.swift; sourceTree = "<group>"; };
+		E02000062 /* AmbientLevelTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientLevelTracker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +181,7 @@
 				E0200001D /* RecordingService.swift */,
 				E0200001E /* ReportGenerator.swift */,
 				E02000061 /* SensitivitySettings.swift */,
+				E02000062 /* AmbientLevelTracker.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -216,6 +221,7 @@
 			children = (
 				E02000020 /* FootstepNoiseAnalyzerTests.swift */,
 				E02000060 /* AudioFileAnalysisTests.swift */,
+				E02000063 /* SpectralAnalysisTests.swift */,
 			);
 			path = FootstepNoiseAnalyzerTests;
 			sourceTree = "<group>";
@@ -344,6 +350,7 @@
 				E0100001D /* RecordingService.swift in Sources */,
 				E0100001E /* ReportGenerator.swift in Sources */,
 				E01000061 /* SensitivitySettings.swift in Sources */,
+				E01000062 /* AmbientLevelTracker.swift in Sources */,
 				E01000030 /* RecordingViewModel.swift in Sources */,
 				E01000031 /* SessionListViewModel.swift in Sources */,
 				E01000032 /* SessionDetailViewModel.swift in Sources */,
@@ -361,6 +368,7 @@
 			files = (
 				E01000020 /* FootstepNoiseAnalyzerTests.swift in Sources */,
 				E01000060 /* AudioFileAnalysisTests.swift in Sources */,
+				E01000063 /* SpectralAnalysisTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

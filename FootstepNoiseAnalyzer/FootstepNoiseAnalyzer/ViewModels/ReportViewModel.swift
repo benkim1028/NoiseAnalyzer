@@ -187,8 +187,10 @@ final class ReportViewModel: ObservableObject {
             return .orange
         case .hardStomping:
             return .red
-        case .running:
+        case .extremeStomping:
             return .purple
+        case .running:
+            return .blue
         case .unknown:
             return .gray
         }

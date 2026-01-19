@@ -17,21 +17,33 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
     private var errorToThrow: Error?
     private var classificationDelay: TimeInterval = 0
     private let config: ClassifierConfig
+    private let sensitivitySettings: SensitivitySettings
+    private let ambientTracker: AmbientLevelTracker
     
     // MARK: - Initialization
     
-    init(config: ClassifierConfig = .default) {
+    init(
+        config: ClassifierConfig = .default,
+        sensitivitySettings: SensitivitySettings = .shared,
+        ambientTracker: AmbientLevelTracker = .shared
+    ) {
         self.config = config
+        self.sensitivitySettings = sensitivitySettings
+        self.ambientTracker = ambientTracker
     }
     
     init(fixedResult: FootstepClassification) {
         self.fixedResult = fixedResult
         self.config = .default
+        self.sensitivitySettings = .shared
+        self.ambientTracker = .shared
     }
     
     init(error: Error) {
         self.errorToThrow = error
         self.config = .default
+        self.sensitivitySettings = .shared
+        self.ambientTracker = .shared
     }
     
     // MARK: - Configuration Methods
@@ -86,11 +98,14 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
         
         let interval: TimeInterval? = previousConfirmedEventTime.map { currentTime - $0 }
         
-        // Determine type based on decibel level
+        // Get thresholds based on ambient level
+        let thresholds = sensitivitySettings.getThresholds(ambientLevel: ambientTracker.ambientLevel)
+        
+        // Determine type based on decibel level using ambient-relative thresholds
         let type: FootstepType
         let confidence: Float
         
-        if decibelLevel < config.minimumDecibelLevel {
+        if decibelLevel < thresholds.mild {
             return nil
         }
         
@@ -110,14 +125,17 @@ final class MockNoiseClassifier: NoiseClassifierProtocol {
         if let interval = interval, interval <= config.runningIntervalThreshold {
             type = .running
             confidence = 0.85
-        } else if decibelLevel < config.mildToMediumDb {
+        } else if decibelLevel < thresholds.medium {
             type = .mildStomping
             confidence = 0.75
-        } else if decibelLevel < config.mediumToHardDb {
+        } else if decibelLevel < thresholds.hard {
             type = .mediumStomping
             confidence = 0.80
-        } else {
+        } else if decibelLevel < thresholds.extreme {
             type = .hardStomping
+            confidence = 0.85
+        } else {
+            type = .extremeStomping
             confidence = 0.90
         }
         
@@ -190,6 +208,11 @@ extension MockNoiseClassifier {
     /// Create a buffer simulating hard stomping (high amplitude, low frequency)
     static func createHardStompingBuffer() -> AVAudioPCMBuffer? {
         return createTestBuffer(amplitude: 0.8, frequency: 60.0, duration: 0.15)
+    }
+    
+    /// Create a buffer simulating extreme stomping (very high amplitude, low frequency)
+    static func createExtremeStompingBuffer() -> AVAudioPCMBuffer? {
+        return createTestBuffer(amplitude: 0.95, frequency: 50.0, duration: 0.15)
     }
     
     /// Create a buffer simulating running
