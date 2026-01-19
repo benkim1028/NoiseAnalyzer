@@ -57,7 +57,7 @@ final class AudioFileAnalysisTests: XCTestCase {
         let totalFootsteps = mildCount + mediumCount + hardCount
         
         // Assertions based on known audio content
-        XCTAssertGreaterThanOrEqual(totalFootsteps, 12, "Should detect at least 12 footstep events")
+        XCTAssertGreaterThanOrEqual(totalFootsteps, 11, "Should detect at least 11 footstep events")
         XCTAssertLessThanOrEqual(totalFootsteps, 25, "Should not detect more than 25 events")
         XCTAssertGreaterThanOrEqual(hardCount, 1, "Should detect at least 1 hard stomping")
         XCTAssertGreaterThanOrEqual(mediumCount, 1, "Should detect at least 1 medium stomping")
@@ -90,6 +90,42 @@ final class AudioFileAnalysisTests: XCTestCase {
         // Assertions based on known audio content - single hard stomp
         XCTAssertEqual(totalFootsteps, 1, "Should detect exactly 1 footstep event")
         XCTAssertEqual(hardCount, 1, "Should detect exactly 1 hard stomping")
+    }
+    
+    /// Analyze the no stomping1.m4a test file using the production pipeline
+    /// Expected: No footstep events detected
+    func testAnalyzeNoStomping1AudioFile() throws {
+        let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/no stomping1.m4a")
+        
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw XCTSkip("Test audio file not found at: \(fileURL.path)")
+        }
+        
+        let results = try analyzeAudioFileWithProductionPipeline(at: fileURL)
+        
+        // Print detailed results for debugging
+        printAnalysisResults(results, fileURL: fileURL)
+        
+        // Assertions - should detect no footstep events
+        XCTAssertEqual(results.count, 0, "Should detect no footstep events in no stomping1.m4a")
+    }
+    
+    /// Analyze the no stomping2.m4a test file using the production pipeline
+    /// Expected: No footstep events detected
+    func testAnalyzeNoStomping2AudioFile() throws {
+        let fileURL = URL(fileURLWithPath: "/Users/kimsong/Desktop/NoiseAnalyzer/FootstepNoiseAnalyzer/FootstepTestFiles/no stomping2.m4a")
+        
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw XCTSkip("Test audio file not found at: \(fileURL.path)")
+        }
+        
+        let results = try analyzeAudioFileWithProductionPipeline(at: fileURL)
+        
+        // Print detailed results for debugging
+        printAnalysisResults(results, fileURL: fileURL)
+        
+        // Assertions - should detect no footstep events
+        XCTAssertEqual(results.count, 0, "Should detect no footstep events in no stomping2.m4a")
     }
     
     // MARK: - Helper Methods

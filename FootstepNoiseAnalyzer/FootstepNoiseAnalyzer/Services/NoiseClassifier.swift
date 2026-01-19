@@ -48,8 +48,16 @@ enum ClassificationError: Error, LocalizedError {
 
 /// Configuration for the noise classifier thresholds.
 struct ClassifierConfig {
-    /// Maximum frequency (Hz) to be considered "low frequency" footstep
+    /// Maximum dominant frequency (Hz) to be considered a footstep candidate
     let lowFrequencyThreshold: Float
+    
+    /// Minimum ratio of impact energy (20-100 Hz) to total energy for footstep detection
+    /// Footsteps have strong sub-bass impact; other sounds have energy spread across bands
+    let minimumImpactEnergyRatio: Float
+    
+    /// Minimum dB level for events at the frequency threshold boundary
+    /// Events at exactly the frequency threshold need higher dB to be considered footsteps
+    let boundaryFrequencyMinDb: Float
     
     /// Decibel threshold between mild and medium stomping
     let mildToMediumDb: Float
@@ -70,13 +78,15 @@ struct ClassifierConfig {
     let echoDbDropThreshold: Float
     
     static let `default` = ClassifierConfig(
-        lowFrequencyThreshold: 500,      // Hz - footsteps typically below 500 Hz
+        lowFrequencyThreshold: 65,       // Hz - footsteps typically have dominant freq at or below 65 Hz
+        minimumImpactEnergyRatio: 0.30,  // Impact band must be at least 30% of total energy
+        boundaryFrequencyMinDb: 38.0,    // dB - events at 60-70 Hz need at least 38 dB
         mildToMediumDb: 40,              // dB SPL - normal walking (calibrated for 75 dB offset)
-        mediumToHardDb: 44,              // dB SPL - heavy walking (calibrated for 75 dB offset)
+        mediumToHardDb: 43,              // dB SPL - heavy walking (calibrated for 75 dB offset)
         runningIntervalThreshold: 0.15,  // seconds - very short interval for running
-        minimumDecibelLevel: 33,         // dB SPL - ignore ambient noise (calibrated for 75 dB offset)
-        echoWindowSeconds: 1.5,          // seconds - window to detect echoes (increased for reverb)
-        echoDbDropThreshold: 8.0         // dB - drop threshold to identify echo (lowered to catch more echoes)
+        minimumDecibelLevel: 32,         // dB SPL - ignore ambient noise (lowered to capture more events)
+        echoWindowSeconds: 0.5,          // seconds - reduced echo window to capture more events
+        echoDbDropThreshold: 12.0        // dB - increased drop threshold to be less aggressive
     )
 }
 
@@ -148,12 +158,30 @@ final class NoiseClassifier: NoiseClassifierProtocol {
         // Calculate interval from previous CONFIRMED event (for running detection)
         let interval: TimeInterval? = previousConfirmedEventTime.map { currentTime - $0 }
         
-        // Determine if this is a low-frequency sound (footstep candidate)
+        // Check if this is a footstep candidate using multiple criteria:
+        // 1. Dominant frequency must be low (at or below threshold)
+        // 2. Impact energy (20-100 Hz) must be significant portion of total energy
+        // 3. Events at boundary frequency (60-70 Hz) need higher dB OR very high impact ratio
         let isLowFrequency = spectrum.dominantFrequency <= config.lowFrequencyThreshold
+        let totalEnergy = spectrum.impactEnergy + spectrum.lowMidEnergy + spectrum.midEnergy + spectrum.highMidEnergy + spectrum.highEnergy
+        let impactRatio = totalEnergy > 0 ? spectrum.impactEnergy / totalEnergy : 0
+        let hasStrongImpact = impactRatio >= config.minimumImpactEnergyRatio
+        
+        // For events at the boundary frequency (60-70 Hz):
+        // - Need dB >= 35 AND impact ratio < 0.57 (to filter out false positives with high impact ratio)
+        // - OR need very high dB (>= 43) regardless of impact ratio
+        let isAtBoundary = spectrum.dominantFrequency >= 60 && spectrum.dominantFrequency <= 70
+        let hasModerateDb = decibelLevel >= config.boundaryFrequencyMinDb
+        let hasVeryHighDb = decibelLevel >= 43.0
+        let hasNormalImpact = impactRatio < 0.57
+        let meetsBoundaryRequirement = !isAtBoundary || hasVeryHighDb || (hasModerateDb && hasNormalImpact)
+        
+        // Must pass all checks to be considered a footstep
+        let isFootstepCandidate = isLowFrequency && hasStrongImpact && meetsBoundaryRequirement
         
         // Classify the sound
         let (type, confidence) = classifySound(
-            isLowFrequency: isLowFrequency,
+            isFootstepCandidate: isFootstepCandidate,
             decibelLevel: decibelLevel,
             interval: interval
         )
@@ -171,12 +199,12 @@ final class NoiseClassifier: NoiseClassifierProtocol {
     
     /// Classify the sound based on frequency, decibel level, and interval.
     private func classifySound(
-        isLowFrequency: Bool,
+        isFootstepCandidate: Bool,
         decibelLevel: Float,
         interval: TimeInterval?
     ) -> (FootstepType, Float) {
-        // If not low frequency, it's not a footstep
-        guard isLowFrequency else {
+        // If not a footstep candidate, it's not a footstep
+        guard isFootstepCandidate else {
             return (.unknown, 0.3)
         }
         

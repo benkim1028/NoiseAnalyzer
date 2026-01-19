@@ -544,6 +544,97 @@ class JSONSerializer {
 
 **Validates: Requirements 8.4**
 
+## Classification Thresholds, Sensitivity & Calibration
+
+This section explains how the classification thresholds, sensitivity setting, and calibration offset work together to detect and classify footstep sounds.
+
+### Classification Thresholds (Fixed)
+
+The base dB SPL thresholds for classifying footstep types are defined in `ClassifierConfig`:
+
+| Classification | dB SPL Range | Description |
+|---------------|--------------|-------------|
+| Below threshold | < 33 dB | Ignored as ambient noise |
+| Mild Stomping | 33 - 40 dB | Gentle footsteps |
+| Medium Stomping | 40 - 44 dB | Normal walking |
+| Hard Stomping | > 44 dB | Heavy footsteps |
+| Running | Any intensity | Short interval (≤0.15s) between steps |
+
+### Sensitivity Setting (0.0 to 1.0)
+
+Sensitivity adjusts the `minimumDecibelLevel` — the floor below which sounds are ignored:
+
+```
+minimumDecibelLevel = 40 - (sensitivity × 14)
+```
+
+| Sensitivity | Min dB Level | Effect |
+|-------------|--------------|--------|
+| 0.0 (Low) | 40 dB | Only detects sounds ≥40 dB (skips mild stomping) |
+| 0.5 (Default) | 33 dB | Detects sounds ≥33 dB (matches default config) |
+| 1.0 (High) | 26 dB | Detects very quiet sounds ≥26 dB |
+
+Sensitivity does NOT change the classification boundaries (40/44 dB) — it only changes what gets filtered out before classification.
+
+### Calibration Offset (-20 to +20 dB)
+
+This adjusts the conversion from digital audio levels (dBFS) to real-world sound pressure levels (dB SPL):
+
+```
+dB SPL = dBFS + 75 (base offset) + calibrationOffset
+```
+
+| Calibration | Effect |
+|-------------|--------|
+| +10 dB | Readings appear 10 dB louder → more events classified as harder stomping |
+| 0 dB | Default calibration |
+| -10 dB | Readings appear 10 dB quieter → more events classified as milder stomping |
+
+The base offset of 75 dB is calibrated so that typical iOS microphone readings map to reasonable dB SPL values:
+- Quiet room (~-45 dBFS) → ~30 dB SPL
+- Normal conversation (~-25 dBFS) → ~50 dB SPL
+- Loud sounds (~-10 dBFS) → ~65 dB SPL
+
+### Frequency Analysis (Gatekeeper)
+
+Frequency acts as a gatekeeper before dB-based classification. Footsteps are characterized by low-frequency impact sounds, so high-frequency sounds are filtered out regardless of volume.
+
+The `FrequencyAnalyzer` performs FFT analysis and determines the dominant frequency. Only sounds with dominant frequency ≤ 500 Hz are considered footstep candidates:
+
+| Dominant Frequency | dB Level | Result |
+|-------------------|----------|--------|
+| > 500 Hz | Any | `.unknown` (not a footstep) |
+| ≤ 500 Hz | < minimumDecibelLevel | Ignored |
+| ≤ 500 Hz | 33-40 dB | Mild Stomping |
+| ≤ 500 Hz | 40-44 dB | Medium Stomping |
+| ≤ 500 Hz | > 44 dB | Hard Stomping |
+
+The analyzer also breaks down the spectrum into frequency bands for potential future use:
+- Impact band: 20-100 Hz (sub-bass)
+- Low-mid band: 100-300 Hz (heel strikes)
+- Mid band: 300-1000 Hz
+- High-mid band: 1000-3000 Hz (shuffling/scraping)
+- High band: 3000-8000 Hz (transients)
+
+### Processing Flow
+
+```
+Raw Audio → RMS → dBFS → (+75 + calibrationOffset) → dB SPL
+                                                        ↓
+                                              (vs minimumDecibelLevel from sensitivity)
+                                                        ↓
+                                              FFT → Dominant Frequency
+                                                        ↓
+                                              (≤500 Hz? → Classification thresholds)
+                                              (>500 Hz? → Unknown)
+```
+
+Summary:
+- `calibrationOffset` shifts ALL dB readings up/down uniformly
+- `sensitivity` changes the detection floor (what gets ignored)
+- `frequency` filters out non-footstep sounds (>500 Hz → unknown)
+- The classification thresholds (40/44 dB) remain constant
+
 ## Error Handling
 
 ### Audio Permission Errors
